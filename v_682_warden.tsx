@@ -1,0 +1,1 @@
+"  return (\n    <div className=\"relative flex h-screen overflow-hidden bg-transparent\">\n      <InteractiveBackground />\n      {/* Sidebar */}"

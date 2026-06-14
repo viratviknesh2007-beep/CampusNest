@@ -1,0 +1,1 @@
+"import React, { useState, useEffect } from \"react\";\nimport { useRouter } from \"next/navigation\";\nimport {\n  Shield,\n  Activity,\n  Home,\n  Users,\n  MessageSquare,\n  Key,\n  Plus,\n  Trash,\n  Settings,\n  Sparkles,\n  AlertTriangle,\n  Info,\n  LogOut\n} from \"lucide-react\";\nimport InteractiveBackground from \"@/components/InteractiveBackground\";"

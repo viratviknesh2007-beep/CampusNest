@@ -1,0 +1,1 @@
+"\"use client\";\n\nimport React from \"react\";\n\nexport default function WardenDashboard() {\n  return (\n    <div className=\"p-8\">\n      <h1 className=\"text-2xl font-bold\">Warden Dashboard Placeholder</h1>\n      <p className=\"mt-4 text-gray-600\">This is a minimal placeholder for the warden portal.</p>\n    </div>\n  );\n}\n"
