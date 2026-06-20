@@ -124,7 +124,12 @@ export default function StudentDashboard() {
       const meRes = await fetch(`${apiUrl}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!meRes.ok) throw new Error();
+      if (meRes.status === 401 || meRes.status === 403) {
+        localStorage.clear();
+        router.push("/");
+        return;
+      }
+      if (!meRes.ok) throw new Error("Auth verify failed");
       const meData = await meRes.json();
       setUser(meData);
 
@@ -169,8 +174,7 @@ export default function StudentDashboard() {
 
 
     } catch (err) {
-      localStorage.clear();
-      router.push("/");
+      console.error("fetchDashboardData error:", err);
     }
   };
 

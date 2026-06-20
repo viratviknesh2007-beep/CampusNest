@@ -221,7 +221,12 @@ export default function AdminDashboard() {
       const meRes = await fetch(`${apiUrl}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!meRes.ok) throw new Error();
+      if (meRes.status === 401 || meRes.status === 403) {
+        localStorage.clear();
+        router.push("/");
+        return;
+      }
+      if (!meRes.ok) throw new Error("Auth verify failed");
       setUser(await meRes.json());
 
       // 2. Fetch Map Layout
@@ -269,9 +274,7 @@ export default function AdminDashboard() {
       if (msgRes.ok) setPostedMessages(await msgRes.json());
 
     } catch (e) {
-      console.error(e);
-      localStorage.clear();
-      router.push("/");
+      console.error("fetchAdminData error:", e);
     }
   };
 

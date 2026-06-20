@@ -92,7 +92,12 @@ export default function WardenDashboard() {
       const meRes = await fetch(`${apiUrl}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!meRes.ok) throw new Error();
+      if (meRes.status === 401 || meRes.status === 403) {
+        localStorage.clear();
+        router.push("/");
+        return;
+      }
+      if (!meRes.ok) throw new Error("Auth verify failed");
       const meData = await meRes.json();
       setUser(meData);
 
@@ -154,9 +159,7 @@ export default function WardenDashboard() {
       if (msgRes.ok) setPostedMessages(await msgRes.json());
 
     } catch (err) {
-      console.error(err);
-      localStorage.clear();
-      router.push("/");
+      console.error("fetchWardenData error:", err);
     }
   };
 
