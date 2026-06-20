@@ -19,13 +19,18 @@ import {
   HelpCircle,
   Clock,
   Compass,
-  AlertTriangle
+  AlertTriangle,
+  Sun,
+  Sunset,
+  Moon
 } from "lucide-react";
 
 import InteractiveBackground from "@/components/InteractiveBackground";
+import { useTheme } from "@/components/ThemeWrapper";
 
 export default function StudentDashboard() {
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState("overview");
   const [user, setUser] = useState<any>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -33,7 +38,6 @@ export default function StudentDashboard() {
   const [leaves, setLeaves] = useState<any[]>([]);
   const [gatePasses, setGatePasses] = useState<any[]>([]);
   const [lostFound, setLostFound] = useState<any[]>([]);
-  const [roommateMatches, setRoommateMatches] = useState<any[]>([]);
   const [lostFoundMatches, setLostFoundMatches] = useState<any[]>([]);
 
   // Form states
@@ -52,10 +56,7 @@ export default function StudentDashboard() {
   const [lfType, setLfType] = useState("Lost");
   const [lfContact, setLfContact] = useState("");
 
-  // Roommate preferences
-  const [sleepPref, setSleepPref] = useState("Early Bird");
-  const [studyPref, setStudyPref] = useState("Silent");
-  const [cleanPref, setCleanPref] = useState("High");
+
 
   // Chatbot states
   const [showChat, setShowChat] = useState(false);
@@ -66,6 +67,44 @@ export default function StudentDashboard() {
 
   // SOS state
   const [sosStatus, setSosStatus] = useState("");
+
+  // Unseen Notifications State
+  const [lastSeenCount, setLastSeenCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("last_seen_messages_count");
+      if (saved) {
+        setLastSeenCount(parseInt(saved, 10));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "notifications") {
+      setLastSeenCount(notifications.length);
+      localStorage.setItem("last_seen_messages_count", notifications.length.toString());
+    }
+  }, [activeTab, notifications.length]);
+
+  // Unseen Lost & Found State
+  const [lastSeenLostFoundCount, setLastSeenLostFoundCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("last_seen_lostfound_count");
+      if (saved) {
+        setLastSeenLostFoundCount(parseInt(saved, 10));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "lostfound" && lostFound.length > 0) {
+      setLastSeenLostFoundCount(lostFound.length);
+      localStorage.setItem("last_seen_lostfound_count", lostFound.length.toString());
+    }
+  }, [activeTab, lostFound.length]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -89,15 +128,10 @@ export default function StudentDashboard() {
       const meData = await meRes.json();
       setUser(meData);
 
-      // Prepopulate prefs
-      if (meData.student_profile) {
-        setSleepPref(meData.student_profile.sleep_schedule || "Early Bird");
-        setStudyPref(meData.student_profile.study_preference || "Silent");
-        setCleanPref(meData.student_profile.cleanliness_level || "High");
-      }
 
-      // 2. Fetch Notifications
-      const notifRes = await fetch(`${apiUrl}/api/auth/notifications`, {
+
+      // 2. Fetch Messages
+      const notifRes = await fetch(`${apiUrl}/api/auth/messages`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (notifRes.ok) setNotifications(await notifRes.json());
@@ -132,16 +166,7 @@ export default function StudentDashboard() {
       });
       if (lfMatchRes.ok) setLostFoundMatches(await lfMatchRes.json());
 
-      // 8. Fetch Roommate Recommendations
-      const roommateRes = await fetch(`${apiUrl}/api/ai/roommate-recommendations`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (roommateRes.ok) {
-        const roommateData = await roommateRes.json();
-        if (roommateData.status === "success") {
-          setRoommateMatches(roommateData.matches);
-        }
-      }
+
 
     } catch (err) {
       localStorage.clear();
@@ -284,32 +309,7 @@ export default function StudentDashboard() {
     }
   };
 
-  // Save Preferences
-  const savePreferences = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-      const res = await fetch(`${apiUrl}/api/rooms/preferences`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          sleep_schedule: sleepPref,
-          study_preference: studyPref,
-          cleanliness_level: cleanPref
-        })
-      });
-
-      if (res.ok) {
-        fetchDashboardData();
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   // Trigger SOS
   const triggerSOS = async () => {
@@ -375,10 +375,10 @@ export default function StudentDashboard() {
   };
 
   return (
-    <div className="relative flex h-screen overflow-hidden bg-[#0b0f19] text-slate-100">
+    <div className="relative flex h-screen overflow-hidden bg-transparent text-[var(--text-primary)]">
       <InteractiveBackground />
       {/* Sidebar Navigation */}
-      <div className="w-64 sidebar-glass flex flex-col justify-between p-6 hidden md:flex">
+      <div className="w-64 sidebar-glass flex flex-col justify-between p-6 hidden md:flex z-10">
         <div className="space-y-6">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 bg-gradient-to-tr from-[#692475] to-[#82ab7d] rounded-xl flex items-center justify-center text-white shadow-md">
@@ -390,8 +390,8 @@ export default function StudentDashboard() {
               </svg>
             </div>
             <div>
-              <h2 className="font-extrabold text-lg tracking-tight text-white">CampusNest</h2>
-              <p className="text-xs opacity-60">Student Portal</p>
+              <h2 className="font-extrabold text-lg tracking-tight text-[var(--text-primary)]">CampusNest</h2>
+              <p className="text-xs text-white/90">Student Portal</p>
             </div>
           </div>
 
@@ -399,25 +399,18 @@ export default function StudentDashboard() {
             <button
               onClick={() => setActiveTab("overview")}
               className={`w-full py-2.5 px-4 rounded-xl flex items-center gap-3 font-semibold text-sm transition-all ${
-                activeTab === "overview" ? "bg-[#82ab7d]/20 text-[#cfaecf] border-l-4 border-[#82ab7d]" : "opacity-70 hover:opacity-100 hover:bg-white/5"
+                activeTab === "overview" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
               }`}
             >
-              <Home className="h-4.5 w-4.5" /> Overview
+              <Home className="h-4.5 w-4.5" /> Profile
             </button>
 
-            <button
-              onClick={() => setActiveTab("roommate")}
-              className={`w-full py-2.5 px-4 rounded-xl flex items-center gap-3 font-semibold text-sm transition-all ${
-                activeTab === "roommate" ? "bg-[#82ab7d]/20 text-[#cfaecf] border-l-4 border-[#82ab7d]" : "opacity-70 hover:opacity-100 hover:bg-white/5"
-              }`}
-            >
-              <Sparkles className="h-4.5 w-4.5" /> Roommate Finder
-            </button>
+
 
             <button
               onClick={() => setActiveTab("complaints")}
               className={`w-full py-2.5 px-4 rounded-xl flex items-center gap-3 font-semibold text-sm transition-all ${
-                activeTab === "complaints" ? "bg-[#82ab7d]/20 text-[#cfaecf] border-l-4 border-[#82ab7d]" : "opacity-70 hover:opacity-100 hover:bg-white/5"
+                activeTab === "complaints" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
               }`}
             >
               <MessageSquare className="h-4.5 w-4.5" /> Complaints
@@ -426,7 +419,7 @@ export default function StudentDashboard() {
             <button
               onClick={() => setActiveTab("leaves")}
               className={`w-full py-2.5 px-4 rounded-xl flex items-center gap-3 font-semibold text-sm transition-all ${
-                activeTab === "leaves" ? "bg-[#82ab7d]/20 text-[#cfaecf] border-l-4 border-[#82ab7d]" : "opacity-70 hover:opacity-100 hover:bg-white/5"
+                activeTab === "leaves" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
               }`}
             >
               <FileText className="h-4.5 w-4.5" /> Leave Forms
@@ -435,7 +428,7 @@ export default function StudentDashboard() {
             <button
               onClick={() => setActiveTab("gatepass")}
               className={`w-full py-2.5 px-4 rounded-xl flex items-center gap-3 font-semibold text-sm transition-all ${
-                activeTab === "gatepass" ? "bg-[#82ab7d]/20 text-[#cfaecf] border-l-4 border-[#82ab7d]" : "opacity-70 hover:opacity-100 hover:bg-white/5"
+                activeTab === "gatepass" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
               }`}
             >
               <Key className="h-4.5 w-4.5" /> Gate Passes
@@ -443,11 +436,35 @@ export default function StudentDashboard() {
 
             <button
               onClick={() => setActiveTab("lostfound")}
-              className={`w-full py-2.5 px-4 rounded-xl flex items-center gap-3 font-semibold text-sm transition-all ${
-                activeTab === "lostfound" ? "bg-[#82ab7d]/20 text-[#cfaecf] border-l-4 border-[#82ab7d]" : "opacity-70 hover:opacity-100 hover:bg-white/5"
+              className={`w-full py-2.5 px-4 rounded-xl flex items-center justify-between font-semibold text-sm transition-all ${
+                activeTab === "lostfound" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
               }`}
             >
-              <Compass className="h-4.5 w-4.5" /> Lost & Found
+              <div className="flex items-center gap-3">
+                <Compass className="h-4.5 w-4.5" /> Lost & Found
+              </div>
+              {lostFound.length - lastSeenLostFoundCount > 0 && activeTab !== "lostfound" && (
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-600 text-white rounded-full">
+                  {lostFound.length - lastSeenLostFoundCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab("notifications")}
+              title="messages will dissappear every 24 hrs"
+              className={`w-full py-2.5 px-4 rounded-xl flex items-center justify-between font-semibold text-sm transition-all ${
+                activeTab === "notifications" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Bell className="h-4.5 w-4.5" /> Notifications
+              </div>
+              {notifications.length - lastSeenCount > 0 && activeTab !== "notifications" && (
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-600 text-white rounded-full">
+                  {notifications.length - lastSeenCount}
+                </span>
+              )}
             </button>
           </nav>
         </div>
@@ -461,14 +478,14 @@ export default function StudentDashboard() {
       </div>
 
       {/* Main Panel */}
-      <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-8">
+      <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-8 z-10">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+        <div className="flex items-center justify-between mb-8 pb-4 border-b border-[var(--glass-border)]">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-white">
               {welcomeMessage()}, {user.full_name} 👋
             </h1>
-            <p className="text-xs opacity-60 mt-1">
+            <p className="text-xs text-sky-300 mt-1">
               Roll: {profile?.roll_number} | Room: {profile?.room ? `${profile.room.block_name} - ${profile.room.room_number}` : "Not Allocated"}
             </p>
           </div>
@@ -490,17 +507,32 @@ export default function StudentDashboard() {
           </div>
         )}
 
+        {notifications.length - lastSeenCount > 0 && activeTab !== "notifications" && (
+          <div className="mb-6 p-4 rounded-2xl bg-indigo-500/10 border-2 border-indigo-500/20 text-white text-xs md:text-sm font-semibold flex justify-between items-center gap-3 animate-pulse-subtle">
+            <div className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-indigo-400 animate-bounce" />
+              <span>You have {notifications.length - lastSeenCount} new unread notifications.</span>
+            </div>
+            <button
+              onClick={() => setActiveTab("notifications")}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold transition-all shadow cursor-pointer shrink-0"
+            >
+              View
+            </button>
+          </div>
+        )}
+
         {/* Dynamic Tab Switcher for Mobile */}
-        <div className="flex gap-2 overflow-x-auto pb-4 mb-4 md:hidden border-b border-white/5">
-          {["overview", "roommate", "complaints", "leaves", "gatepass", "lostfound"].map((t) => (
+        <div className="flex gap-2 overflow-x-auto pb-4 mb-4 md:hidden border-b border-[var(--glass-border)]">
+          {["overview", "complaints", "leaves", "gatepass", "lostfound", "notifications"].map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
               className={`px-4 py-1.5 rounded-full text-xs font-bold capitalize shrink-0 transition-all ${
-                activeTab === t ? "bg-emerald-500 text-white" : "glass-card text-slate-300"
+                activeTab === t ? "bg-emerald-600 text-white border border-emerald-500 font-bold" : "glass-card text-sky-200"
               }`}
             >
-              {t}
+              {t === "gatepass" ? "Gate Passes" : t === "lostfound" ? (activeTab === "lostfound" ? "Lost & Found" : (lostFound.length - lastSeenLostFoundCount > 0 ? `Lost & Found (${lostFound.length - lastSeenLostFoundCount})` : "Lost & Found")) : t === "notifications" ? (activeTab === "notifications" ? "Notifications" : (notifications.length - lastSeenCount > 0 ? `Notifications (${notifications.length - lastSeenCount})` : "Notifications")) : t === "overview" ? "Profile" : t}
             </button>
           ))}
         </div>
@@ -512,42 +544,42 @@ export default function StudentDashboard() {
             <div className="md:col-span-2 space-y-6">
               {/* Personalized Dashboard Row */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="glass-panel rounded-2xl p-5 border border-white/5">
-                  <span className="text-xs opacity-60 font-semibold block uppercase">Room Status</span>
-                  <span className="text-xl md:text-2xl font-black mt-2 block text-emerald-400">
+                <div className="glass-panel rounded-2xl p-5 border-2 border-slate-800/80">
+                  <span className="text-xs text-emerald-400 font-bold block uppercase tracking-wider">Room Status</span>
+                  <span className="text-xl md:text-2xl font-black mt-2 block text-white">
                     {profile?.room ? `${profile.room.block_name} - Room ${profile.room.room_number}` : "Pending"}
                   </span>
                 </div>
-                <div className="glass-panel rounded-2xl p-5 border border-white/5">
-                  <span className="text-xs opacity-60 font-semibold block uppercase">Pending Complaints</span>
-                  <span className="text-xl md:text-2xl font-black mt-2 block text-amber-400">
+                <div className="glass-panel rounded-2xl p-5 border-2 border-slate-800/80">
+                  <span className="text-xs text-emerald-400 font-bold block uppercase tracking-wider">Pending Complaints</span>
+                  <span className="text-xl md:text-2xl font-black mt-2 block text-white">
                     {complaints.filter(c => c.status !== "Resolved").length}
                   </span>
                 </div>
-                <div className="glass-panel rounded-2xl p-5 border border-white/5">
-                  <span className="text-xs opacity-60 font-semibold block uppercase">Approved Leaves</span>
-                  <span className="text-xl md:text-2xl font-black mt-2 block text-indigo-400">
+                <div className="glass-panel rounded-2xl p-5 border-2 border-slate-800/80">
+                  <span className="text-xs text-emerald-400 font-bold block uppercase tracking-wider">Approved Leaves</span>
+                  <span className="text-xl md:text-2xl font-black mt-2 block text-white">
                     {leaves.filter(l => l.status === "Approved").length}
                   </span>
                 </div>
-                <div className="glass-panel rounded-2xl p-5 border border-white/5">
-                  <span className="text-xs opacity-60 font-semibold block uppercase">Active Gate Pass</span>
-                  <span className="text-xl md:text-2xl font-black mt-2 block text-emerald-400">
-                    {gatePasses.some(p => p.status === "Active" || p.status === "Generated") ? "Valid Pass Available" : "None"}
+                <div className="glass-panel rounded-2xl p-5 border-2 border-slate-800/80">
+                  <span className="text-xs text-emerald-400 font-bold block uppercase tracking-wider">Active Gate Pass</span>
+                  <span className="text-xl md:text-2xl font-black mt-2 block text-white">
+                    {gatePasses.some(p => (p.status === "Active" || p.status === "Generated" || p.status === "Approved") && new Date(p.entry_time) >= new Date()) ? "Valid Pass Available" : "None"}
                   </span>
                 </div>
               </div>
 
               {/* Activity Timeline */}
-              <div className="glass-panel rounded-2xl p-6 border border-white/5">
-                <h3 className="text-lg font-bold mb-4">Activity Timeline</h3>
+              <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80">
+                <h3 className="text-lg font-bold mb-4 text-white">Activity Timeline</h3>
                 <div className="space-y-4">
                   {complaints.slice(0, 2).map((c, i) => (
                     <div key={i} className="flex gap-3 text-sm items-start">
                       <div className="h-2 w-2 rounded-full bg-amber-500 mt-1.5" />
                       <div>
                         <p className="font-semibold">Complaint submitted: {c.title}</p>
-                        <span className="text-xs opacity-50">{new Date(c.created_at).toLocaleDateString()}</span>
+                        <span className="text-xs text-sky-300/80">{new Date(c.created_at).toLocaleDateString()}</span>
                       </div>
                     </div>
                   ))}
@@ -556,28 +588,28 @@ export default function StudentDashboard() {
                       <div className="h-2 w-2 rounded-full bg-indigo-500 mt-1.5" />
                       <div>
                         <p className="font-semibold">Leave application {l.status}: {l.reason}</p>
-                        <span className="text-xs opacity-50">{new Date(l.created_at).toLocaleDateString()}</span>
+                        <span className="text-xs text-sky-300/80">{new Date(l.created_at).toLocaleDateString()}</span>
                       </div>
                     </div>
                   ))}
                   {complaints.length === 0 && leaves.length === 0 && (
-                    <p className="text-xs opacity-60">No recent actions recorded.</p>
+                    <p className="text-xs text-sky-300">No recent actions recorded.</p>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Right Column: Digital Hostel ID Pass */}
-            <div className="glass-panel rounded-3xl p-6 border border-white/5 flex flex-col items-center text-center glow-border relative overflow-hidden">
+            <div className="glass-panel rounded-3xl p-6 border-2 border-slate-800/80 flex flex-col items-center text-center glow-border relative overflow-hidden">
               <div className="absolute top-0 right-0 h-16 w-16 bg-gradient-to-br from-emerald-500/20 to-amber-500/20 rounded-bl-full" />
-              <h3 className="text-base font-extrabold uppercase tracking-wider text-emerald-400 mb-4">Digital Hostel ID Pass</h3>
+              <h3 className="text-base font-extrabold uppercase tracking-wider text-white font-black mb-4">Digital Hostel ID Pass</h3>
               
               <div className="h-24 w-24 rounded-full bg-slate-800 border-4 border-emerald-500 flex items-center justify-center font-black text-2xl text-white shadow-inner mb-3">
                 {user.full_name[0]}
               </div>
 
-              <h4 className="font-bold text-lg">{user.full_name}</h4>
-              <p className="text-xs opacity-60">Roll: {profile?.roll_number}</p>
+              <h4 className="font-bold text-lg text-white">{user.full_name}</h4>
+              <p className="text-xs text-sky-300">Roll: {profile?.roll_number}</p>
               
               <div className="my-5 p-3 bg-white rounded-2xl shadow-lg border border-slate-200">
                 <QRCodeSVG
@@ -591,126 +623,36 @@ export default function StudentDashboard() {
                 />
               </div>
 
-              <div className="w-full text-xs space-y-2 border-t border-white/5 pt-4">
-                <div className="flex justify-between"><span className="opacity-60">Dept:</span> <span className="font-semibold">{profile?.department}</span></div>
-                <div className="flex justify-between"><span className="opacity-60">Year:</span> <span className="font-semibold">Year {profile?.year}</span></div>
-                <div className="flex justify-between"><span className="opacity-60">Emergency No:</span> <span className="font-semibold">{profile?.emergency_contact}</span></div>
+              <div className="w-full text-xs space-y-2 border-t border-[var(--glass-border)] pt-4">
+                <div className="flex justify-between"><span className="text-emerald-400 font-semibold">Dept:</span> <span className="text-white font-bold">{profile?.department}</span></div>
+                <div className="flex justify-between"><span className="text-emerald-400 font-semibold">Year:</span> <span className="text-white font-bold">Year {profile?.year}</span></div>
+                <div className="flex justify-between"><span className="text-emerald-400 font-semibold">Emergency No:</span> <span className="text-white font-bold">{profile?.emergency_contact}</span></div>
               </div>
             </div>
           </div>
         )}
 
-        {activeTab === "roommate" && (
-          <div className="grid md:grid-cols-2 gap-6 items-start">
-            {/* Preferences Setup */}
-            <div className="glass-panel rounded-2xl p-6 border border-white/5">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-emerald-400">
-                <Sparkles className="h-5 w-5 animate-pulse" /> Roommate Preferences
-              </h3>
-              <p className="text-xs opacity-75 mb-6">
-                Tell CampusNest your living habits. The AI roommate suggestions engine will process these compatibility metrics to recommend matching students.
-              </p>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold mb-2">Sleep Schedule</label>
-                  <select
-                    value={sleepPref}
-                    onChange={(e) => setSleepPref(e.target.value)}
-                    className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
-                  >
-                    <option value="Early Bird" className="bg-slate-900">Early Bird</option>
-                    <option value="Night Owl" className="bg-slate-900">Night Owl</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold mb-2">Study Preferences</label>
-                  <select
-                    value={studyPref}
-                    onChange={(e) => setStudyPref(e.target.value)}
-                    className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
-                  >
-                    <option value="Silent" className="bg-slate-900">Silent / Solo Study</option>
-                    <option value="Group Study" className="bg-slate-900">Group Study / Active Discussion</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold mb-2">Cleanliness Habit</label>
-                  <select
-                    value={cleanPref}
-                    onChange={(e) => setCleanPref(e.target.value)}
-                    className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
-                  >
-                    <option value="High" className="bg-slate-900">High (Spick & Span)</option>
-                    <option value="Medium" className="bg-slate-900">Medium (Casual cleaning)</option>
-                    <option value="Low" className="bg-slate-900">Low (Relaxed)</option>
-                  </select>
-                </div>
-
-                <button
-                  onClick={savePreferences}
-                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-450 font-bold rounded-xl text-white mt-4"
-                >
-                  Save Habits
-                </button>
-              </div>
-            </div>
-
-            {/* Match Listings */}
-            <div className="glass-panel rounded-2xl p-6 border border-white/5">
-              <h3 className="text-lg font-bold mb-4">Compatible Roommate Suggestions</h3>
-              <div className="space-y-4">
-                {roommateMatches.length > 0 ? (
-                  roommateMatches.map((m, idx) => (
-                    <div key={idx} className="p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
-                      <div>
-                        <h4 className="font-semibold text-sm">{m.full_name}</h4>
-                        <p className="text-xs opacity-60 mt-1">Roll: {m.roll_number} | Dept: {m.department} | Year {m.year}</p>
-                        <div className="flex gap-1.5 flex-wrap mt-2">
-                          {m.reasons.map((r: string, rid: number) => (
-                            <span key={rid} className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">
-                              {r}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xl font-black text-emerald-400 block">{m.compatibility}%</span>
-                        <span className="text-[10px] opacity-60">Compatibility</span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-8 text-center text-xs opacity-60">
-                    No suggestions. Please save your habits first.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {activeTab === "complaints" && (
           <div className="grid md:grid-cols-2 gap-6 items-start">
             {/* Create Complaint */}
-            <div className="glass-panel rounded-2xl p-6 border border-white/5">
-              <h3 className="text-lg font-bold mb-4">Submit a Complaint</h3>
+            <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80">
+              <h3 className="text-lg font-bold mb-4 text-white">Submit a Complaint</h3>
               <form onSubmit={submitComplaint} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold mb-2">Category</label>
                   <select
                     value={complaintCat}
                     onChange={(e) => setComplaintCat(e.target.value)}
-                    className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
+                    className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   >
-                    <option value="Electrical" className="bg-slate-900">Electrical</option>
-                    <option value="Plumbing" className="bg-slate-900">Plumbing</option>
-                    <option value="Internet" className="bg-slate-900">Internet</option>
-                    <option value="Cleaning" className="bg-slate-900">Cleaning</option>
-                    <option value="Furniture" className="bg-slate-900">Furniture</option>
-                    <option value="Other" className="bg-slate-900">Other</option>
+                    <option value="Electrical" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Electrical</option>
+                    <option value="Plumbing" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Plumbing</option>
+                    <option value="Internet" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Internet</option>
+                    <option value="Cleaning" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Cleaning</option>
+                    <option value="Furniture" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Furniture</option>
+                    <option value="Other" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Other</option>
                   </select>
                 </div>
 
@@ -721,7 +663,7 @@ export default function StudentDashboard() {
                     required
                     value={complaintTitle}
                     onChange={(e) => setComplaintTitle(e.target.value)}
-                    className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
+                    className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     placeholder="e.g. WiFi disconnected in corridor"
                   />
                 </div>
@@ -733,14 +675,14 @@ export default function StudentDashboard() {
                     rows={4}
                     value={complaintDesc}
                     onChange={(e) => setComplaintDesc(e.target.value)}
-                    className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
+                    className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     placeholder="Provide detailed description..."
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-450 font-bold rounded-xl text-white"
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 font-extrabold rounded-xl text-white transition-all active:scale-95 shadow-md"
                 >
                   Submit Ticket
                 </button>
@@ -748,15 +690,15 @@ export default function StudentDashboard() {
             </div>
 
             {/* Complaints List */}
-            <div className="glass-panel rounded-2xl p-6 border border-white/5 space-y-4">
+            <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80 space-y-4">
               <h3 className="text-lg font-bold mb-2">Ticket History</h3>
               <div className="max-h-[400px] overflow-y-auto space-y-3 pr-2">
                 {complaints.map((c, i) => (
-                  <div key={i} className="p-4 rounded-xl bg-white/5 border border-white/5">
+                  <div key={i} className="p-4 rounded-xl bg-[var(--input-bg)] border-2 border-slate-800/80">
                     <div className="flex justify-between items-start">
                       <div>
                         <h4 className="font-semibold text-sm">{c.title}</h4>
-                        <p className="text-xs opacity-60 mt-1">{c.description}</p>
+                        <p className="text-xs text-sky-300 mt-1">{c.description}</p>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                         c.status === "Pending" ? "bg-amber-500/20 text-amber-400" :
@@ -766,14 +708,14 @@ export default function StudentDashboard() {
                         {c.status}
                       </span>
                     </div>
-                    <div className="mt-3 flex justify-between items-center text-[10px] opacity-50">
+                    <div className="mt-3 flex justify-between items-center text-[10px] text-sky-300/80">
                       <span>Category: {c.category}</span>
                       <span>Filed: {new Date(c.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                 ))}
                 {complaints.length === 0 && (
-                  <p className="text-xs opacity-60 text-center py-6">No complaints registered.</p>
+                  <p className="text-xs text-sky-300 text-center py-6">No complaints registered.</p>
                 )}
               </div>
             </div>
@@ -783,8 +725,8 @@ export default function StudentDashboard() {
         {activeTab === "leaves" && (
           <div className="grid md:grid-cols-2 gap-6 items-start">
             {/* Submit Leave */}
-            <div className="glass-panel rounded-2xl p-6 border border-white/5">
-              <h3 className="text-lg font-bold mb-4">Apply for Outing / Leave</h3>
+            <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80">
+              <h3 className="text-lg font-bold mb-4 text-white">Apply for Outing / Leave</h3>
               <form onSubmit={submitLeave} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -794,7 +736,7 @@ export default function StudentDashboard() {
                       required
                       value={leaveStart}
                       onChange={(e) => setLeaveStart(e.target.value)}
-                      className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
+                      className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     />
                   </div>
                   <div>
@@ -804,7 +746,7 @@ export default function StudentDashboard() {
                       required
                       value={leaveEnd}
                       onChange={(e) => setLeaveEnd(e.target.value)}
-                      className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
+                      className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     />
                   </div>
                 </div>
@@ -816,14 +758,14 @@ export default function StudentDashboard() {
                     rows={4}
                     value={leaveReason}
                     onChange={(e) => setLeaveReason(e.target.value)}
-                    className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
+                    className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     placeholder="e.g. Going home for Pooja holidays..."
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-450 font-bold rounded-xl text-white"
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 font-extrabold rounded-xl text-white transition-all active:scale-95 shadow-md"
                 >
                   Apply Outing
                 </button>
@@ -831,15 +773,15 @@ export default function StudentDashboard() {
             </div>
 
             {/* Leave History */}
-            <div className="glass-panel rounded-2xl p-6 border border-white/5 space-y-4">
+            <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80 space-y-4">
               <h3 className="text-lg font-bold mb-2">Leave Request History</h3>
               <div className="max-h-[400px] overflow-y-auto space-y-3 pr-2">
-                {leaves.map((l, i) => (
-                  <div key={i} className="p-4 rounded-xl bg-white/5 border border-white/5">
+                {leaves.slice(0, 1).map((l, i) => (
+                  <div key={i} className="p-4 rounded-xl bg-[var(--input-bg)] border-2 border-slate-800/80">
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="text-sm font-semibold">{l.reason}</p>
-                        <p className="text-[11px] opacity-60 mt-1">
+                        <p className="text-[11px] text-sky-300 mt-1">
                           Dates: {new Date(l.start_date).toLocaleDateString()} to {new Date(l.end_date).toLocaleDateString()}
                         </p>
                       </div>
@@ -852,15 +794,15 @@ export default function StudentDashboard() {
                       </span>
                     </div>
                     {l.warden_remarks && (
-                      <div className="mt-3 p-2 rounded bg-black/20 text-[11px] border border-white/5">
-                        <span className="font-bold block text-emerald-400">Remarks:</span>
+                      <div className="mt-3 p-2 rounded bg-black/20 text-[11px] border-2 border-slate-800/80">
+                        <span className="font-bold block text-white">Remarks:</span>
                         {l.warden_remarks}
                       </div>
                     )}
                   </div>
                 ))}
                 {leaves.length === 0 && (
-                  <p className="text-xs opacity-60 text-center py-6">No leave history found.</p>
+                  <p className="text-xs text-sky-300 text-center py-6">No leave history found.</p>
                 )}
               </div>
             </div>
@@ -868,83 +810,92 @@ export default function StudentDashboard() {
         )}
 
         {activeTab === "gatepass" && (
-          <div className="grid md:grid-cols-2 gap-6 items-start">
-            {/* Generate Pass */}
-            <div className="glass-panel rounded-2xl p-6 border border-white/5">
-              <h3 className="text-lg font-bold mb-4">Request Digital Gate Pass</h3>
-              <form onSubmit={submitGatePass} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold mb-2">Purpose / Location</label>
-                  <input
-                    type="text"
-                    required
-                    value={passPurpose}
-                    onChange={(e) => setPassPurpose(e.target.value)}
-                    className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
-                    placeholder="e.g. Canteen/Local Market"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold mb-2">Exit Date & Time</label>
-                    <input
-                      type="datetime-local"
-                      required
-                      value={passExit}
-                      onChange={(e) => setPassExit(e.target.value)}
-                      className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-2">Entry Date & Time</label>
-                    <input
-                      type="datetime-local"
-                      required
-                      value={passEntry}
-                      onChange={(e) => setPassEntry(e.target.value)}
-                      className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-450 font-bold rounded-xl text-white"
-                >
-                  Generate Pass
-                </button>
-              </form>
+          <div className="flex flex-col items-center justify-center space-y-6 max-w-xl mx-auto w-full animate-fade-in">
+            <div className="text-center">
+              <h2 className="text-2xl font-black tracking-tight text-white">Digital Gate Pass</h2>
+              <div className="w-12 h-1 bg-emerald-500 mx-auto mt-2.5 rounded-full shadow-lg shadow-emerald-500/50" />
             </div>
 
-            {/* Passes List with QR */}
-            <div className="glass-panel rounded-2xl p-6 border border-white/5 space-y-4">
-              <h3 className="text-lg font-bold mb-2">Active Gate Passes</h3>
-              <div className="max-h-[400px] overflow-y-auto space-y-4 pr-2">
-                {gatePasses.map((p, idx) => (
-                  <div key={idx} className="p-4 rounded-xl bg-white/5 border border-white/5 grid grid-cols-3 gap-4 items-center">
-                    <div className="col-span-2 space-y-1.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                        p.status === "Returned" ? "bg-slate-500/20 text-slate-400" :
-                        "bg-emerald-500/20 text-emerald-400"
-                      }`}>
-                        {p.status}
-                      </span>
-                      <h4 className="font-semibold text-sm">{p.purpose}</h4>
-                      <p className="text-[10px] opacity-60">
-                        Out: {new Date(p.exit_time).toLocaleString()}<br />
-                        In: {new Date(p.entry_time).toLocaleString()}
-                      </p>
+            <div className="w-full space-y-4">
+              {gatePasses
+                .filter((p) => {
+                  const expiryDate = new Date(p.entry_time);
+                  const currentDate = new Date();
+                  return currentDate <= expiryDate && p.status !== "Returned";
+                })
+                .slice(0, 1)
+                .map((p, idx) => {
+                  const isExpired = new Date(p.entry_time) < new Date();
+                  const isRejected = p.status === "Rejected" || isExpired;
+                  
+                  // Encode student ID info just like the digital ID card
+                  const qrValue = JSON.stringify({
+                    name: user.full_name,
+                    roll: profile?.roll_number,
+                    room: profile?.room?.room_number || "Not Assigned",
+                    block: profile?.room?.block_name || "N/A"
+                  });
+
+                  // Deterministic 6-digit serial number based on database gate pass id
+                  const serialNumber = String(100000 + p.id).substring(0, 6);
+
+                  return (
+                    <div key={idx} className="glass-panel rounded-3xl p-8 border-2 border-slate-800/80 w-full flex flex-col items-center text-center space-y-6 glow-border relative overflow-hidden">
+                      <div className="absolute top-0 right-0 h-16 w-16 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-bl-full" />
+                      
+                      {/* 1. QR Code containing student ID details */}
+                      <div className="flex justify-center p-4 bg-white rounded-2xl shadow-xl border border-slate-200">
+                        <QRCodeSVG value={qrValue} size={180} />
+                      </div>
+
+                      {/* 2. APPROVED in Bold green letters */}
+                      <div>
+                        <span className="text-3xl font-black text-emerald-500 uppercase tracking-widest block font-extrabold">
+                          APPROVED
+                        </span>
+                      </div>
+
+                      {/* 3. 6-digit serial number */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-sky-400 font-bold uppercase tracking-wider block">Gatepass Serial No.</span>
+                        <span className="text-xl font-mono font-bold text-white tracking-widest bg-slate-900/60 px-5 py-2 rounded-xl border border-white/5 block">
+                          {serialNumber}
+                        </span>
+                      </div>
+
+                      {/* 4. From Date and To Date */}
+                      <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-[var(--glass-border)] pt-6 text-sm">
+                        <div className="space-y-1">
+                          <span className="text-xs text-indigo-400 font-bold block uppercase tracking-wider">From Date</span>
+                          <span className="text-white font-semibold block bg-slate-900/40 py-2 px-3 rounded-lg border border-white/5">
+                            {new Date(p.exit_time).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-xs text-indigo-400 font-bold block uppercase tracking-wider">To Date</span>
+                          <span className="text-white font-semibold block bg-slate-900/40 py-2 px-3 rounded-lg border border-white/5">
+                            {new Date(p.entry_time).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Purpose */}
+                      <div className="text-xs text-sky-200/80 italic border-t border-[var(--glass-border)] w-full pt-4">
+                        Purpose: {p.purpose}
+                      </div>
                     </div>
-                    <div className="flex justify-center p-2 bg-white rounded-xl">
-                      <QRCodeSVG value={p.qr_code_data} size={70} />
-                    </div>
-                  </div>
-                ))}
-                {gatePasses.length === 0 && (
-                  <p className="text-xs opacity-60 text-center py-6">No gate passes created yet.</p>
-                )}
-              </div>
+                  );
+                })}
+
+              {gatePasses.filter((p) => {
+                const expiryDate = new Date(p.entry_time);
+                const currentDate = new Date();
+                return currentDate <= expiryDate && p.status !== "Returned";
+              }).length === 0 && (
+                <div className="glass-panel rounded-3xl p-8 border-2 border-slate-800/80 w-full text-center py-12 text-sky-200 italic text-sm">
+                  No active gate passes registered.
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -952,8 +903,8 @@ export default function StudentDashboard() {
         {activeTab === "lostfound" && (
           <div className="grid md:grid-cols-2 gap-6 items-start">
             {/* Create LF Post */}
-            <div className="glass-panel rounded-2xl p-6 border border-white/5">
-              <h3 className="text-lg font-bold mb-4">Post Lost / Found Items</h3>
+            <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80">
+              <h3 className="text-lg font-bold mb-4 text-white">Post Lost / Found Items</h3>
               <form onSubmit={submitLostFound} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -961,10 +912,10 @@ export default function StudentDashboard() {
                     <select
                       value={lfType}
                       onChange={(e) => setLfType(e.target.value)}
-                      className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
+                      className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     >
-                      <option value="Lost" className="bg-slate-900">Lost</option>
-                      <option value="Found" className="bg-slate-900">Found</option>
+                      <option value="Lost" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Lost</option>
+                      <option value="Found" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Found</option>
                     </select>
                   </div>
                   <div>
@@ -972,13 +923,13 @@ export default function StudentDashboard() {
                     <select
                       value={lfCat}
                       onChange={(e) => setLfCat(e.target.value)}
-                      className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
+                      className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     >
-                      <option value="Electronics" className="bg-slate-900">Electronics</option>
-                      <option value="Keys" className="bg-slate-900">Keys</option>
-                      <option value="Books / Documents" className="bg-slate-900">Books / Docs</option>
-                      <option value="Clothing" className="bg-slate-900">Clothing</option>
-                      <option value="Other" className="bg-slate-900">Other</option>
+                      <option value="Electronics" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Electronics</option>
+                      <option value="Keys" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Keys</option>
+                      <option value="Books / Documents" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Books / Docs</option>
+                      <option value="Clothing" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Clothing</option>
+                      <option value="Other" className="bg-[var(--mesh-bg-color)] text-[var(--text-primary)]">Other</option>
                     </select>
                   </div>
                 </div>
@@ -990,7 +941,7 @@ export default function StudentDashboard() {
                     required
                     value={lfTitle}
                     onChange={(e) => setLfTitle(e.target.value)}
-                    className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
+                    className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     placeholder="e.g. Black AirPods Case"
                   />
                 </div>
@@ -1002,7 +953,7 @@ export default function StudentDashboard() {
                     rows={3}
                     value={lfDesc}
                     onChange={(e) => setLfDesc(e.target.value)}
-                    className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
+                    className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     placeholder="Explain location, time, and how to reach you..."
                   />
                 </div>
@@ -1014,14 +965,14 @@ export default function StudentDashboard() {
                     required
                     value={lfContact}
                     onChange={(e) => setLfContact(e.target.value)}
-                    className="w-full p-2.5 bg-black/25 border border-white/10 rounded-xl text-white text-sm"
+                    className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     placeholder="Call 9876..."
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-450 font-bold rounded-xl text-white"
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 font-extrabold rounded-xl text-white transition-all active:scale-95 shadow-md"
                 >
                   Publish Post
                 </button>
@@ -1033,15 +984,15 @@ export default function StudentDashboard() {
               {/* Automated suggestions */}
               {lostFoundMatches.length > 0 && (
                 <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                  <h4 className="font-extrabold text-xs text-emerald-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                  <h4 className="font-extrabold text-xs text-white font-black uppercase tracking-wide mb-3 flex items-center gap-1.5">
                     <Sparkles className="h-4 w-4 animate-spin" /> Auto-Matcher Suggestion
                   </h4>
                   <div className="space-y-3">
                     {lostFoundMatches.map((m, i) => (
-                      <div key={i} className="text-xs bg-slate-900/60 p-3 rounded-xl border border-white/5">
+                      <div key={i} className="text-xs bg-slate-900/60 p-3 rounded-xl border-2 border-slate-800/80">
                         <p className="font-bold text-white mb-1">Match found: "{m.lost_item.title}" & "{m.found_item.title}"</p>
                         <p className="opacity-70 mt-1">Reason: {m.match_reason}</p>
-                        <p className="font-semibold text-emerald-400 mt-2">Contact: {m.found_item.contact_info}</p>
+                        <p className="font-semibold text-white font-black mt-2">Contact: {m.found_item.contact_info}</p>
                       </div>
                     ))}
                   </div>
@@ -1049,7 +1000,7 @@ export default function StudentDashboard() {
               )}
 
               {/* General Posts */}
-              <div className="glass-panel rounded-2xl p-6 border border-white/5 space-y-4">
+              <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80 space-y-4">
                 <h3 className="text-lg font-bold">Lost & Found Feed</h3>
                 <div className="max-h-[300px] overflow-y-auto space-y-3 pr-2">
                   {lostFound.map((item, i) => (
@@ -1065,16 +1016,51 @@ export default function StudentDashboard() {
                             {item.item_type}
                           </span>
                         </div>
-                        <span className="text-[10px] opacity-50">Category: {item.category}</span>
+                        <span className="text-[10px] text-sky-300/80">Category: {item.category}</span>
                       </div>
                       <p className="text-xs opacity-75 mt-2">{item.description}</p>
-                      <p className="text-[10px] font-bold text-slate-400 mt-3">Contact: {item.contact_info}</p>
+                      <p className="text-[10px] font-bold text-sky-300 mt-3">Contact: {item.contact_info}</p>
                     </div>
                   ))}
                   {lostFound.length === 0 && (
-                    <p className="text-xs opacity-60 text-center py-6">No items posted.</p>
+                    <p className="text-xs text-sky-300 text-center py-6">No items posted.</p>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "notifications" && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80">
+              <h2 className="text-xl font-black text-white mb-2">Notifications</h2>
+              <p className="text-xs text-sky-200 mb-6 font-semibold">messages will dissappear every 24 hrs</p>
+              
+              <div className="space-y-4">
+                {notifications.length > 0 ? (
+                  notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      className="p-5 rounded-2xl bg-[var(--input-bg)] border border-[var(--glass-border)] hover:bg-slate-900/40 transition-all duration-300 flex items-start gap-4"
+                    >
+                      <div className="h-10 w-10 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-xl flex items-center justify-center shrink-0">
+                        <Bell className="h-5 w-5" />
+                      </div>
+                      <div className="space-y-1 flex-1">
+                        <div className="flex justify-between items-start flex-wrap gap-2">
+                          <h4 className="font-extrabold text-sm text-white">Sender: {n.sender_name}</h4>
+                          <span className="text-[10px] text-sky-300 opacity-80">{new Date(n.created_at).toLocaleString()}</span>
+                        </div>
+                        <p className="text-xs text-sky-200 leading-relaxed">{n.content}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12 text-sky-200 italic text-sm">
+                    No received messages
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1102,7 +1088,7 @@ export default function StudentDashboard() {
               {chatHistory.map((h, i) => (
                 <div key={i} className={`flex ${h.sender === "user" ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[80%] rounded-xl p-3 shadow-sm ${
-                    h.sender === "user" ? "bg-emerald-500 text-white" : "bg-white/5 border border-white/10"
+                    h.sender === "user" ? "bg-emerald-500 text-white" : "bg-[var(--input-bg)] border border-white/10"
                   }`}>
                     {h.text}
                   </div>
@@ -1111,7 +1097,7 @@ export default function StudentDashboard() {
             </div>
 
             {/* Form */}
-            <form onSubmit={sendChatMessage} className="p-3 border-t border-white/5 flex gap-2">
+            <form onSubmit={sendChatMessage} className="p-3 border-t border-[var(--glass-border)] flex gap-2">
               <input
                 type="text"
                 value={chatMessage}

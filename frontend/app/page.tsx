@@ -118,9 +118,9 @@ export default function Home() {
   const [isRegister, setIsRegister] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Parallax mouse position
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [spotlightPos, setSpotlightPos] = useState({ x: 0, y: 0 });
+  // Parallax mouse position refs
+  const containerRef = useRef<HTMLDivElement>(null);
+  const spotlightRef = useRef<HTMLDivElement>(null);
 
   // Register state
   const [fullName, setFullName] = useState("");
@@ -133,11 +133,14 @@ export default function Home() {
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      setMousePos({
-        x: (e.clientX - window.innerWidth / 2) * 0.015,
-        y: (e.clientY - window.innerHeight / 2) * 0.015,
-      });
-      setSpotlightPos({ x: e.clientX, y: e.clientY });
+      const xVal = (e.clientX - window.innerWidth / 2) * 0.015;
+      const yVal = (e.clientY - window.innerHeight / 2) * 0.015;
+      if (containerRef.current) {
+        containerRef.current.style.transform = `translate(${xVal * 0.8}px, ${yVal * 0.8}px)`;
+      }
+      if (spotlightRef.current) {
+        spotlightRef.current.style.background = `radial-gradient(650px at ${e.clientX}px ${e.clientY}px, rgba(164, 125, 171, 0.07), transparent 70%)`;
+      }
     };
     window.addEventListener("mousemove", handleMouseMove);
     return () => window.removeEventListener("mousemove", handleMouseMove);
@@ -225,46 +228,51 @@ export default function Home() {
   };
 
   const quickLogin = (role: string) => {
+    setIsRegister(false);
     if (role === "student") {
-      handleLogin({ preventDefault: () => {} } as any, "student1@campusnest.edu", "student123");
+      setEmail("student1@campusnest.edu");
+      setPassword("student123");
     } else if (role === "warden") {
-      handleLogin({ preventDefault: () => {} } as any, "warden@campusnest.edu", "warden123");
+      setEmail("warden@campusnestw.edu");
+      setPassword("warden123");
     } else if (role === "admin") {
-      handleLogin({ preventDefault: () => {} } as any, "admin@campusnest.edu", "admin123");
+      setEmail("admin@campusnesta.edu");
+      setPassword("admin123");
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden bg-[#08020a]">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden bg-[#030712]">
       {/* Animated Mesh Gradient Background */}
       <div className="absolute inset-0 mesh-bg opacity-75 z-0" />
 
       {/* Parallax Background Elements */}
       <div
+        ref={containerRef}
         className="absolute inset-0 pointer-events-none z-0 transition-transform duration-300 ease-out"
-        style={{ transform: `translate(${mousePos.x * 0.8}px, ${mousePos.y * 0.8}px)` }}
+        style={{ transform: `translate(0px, 0px)` }}
       >
         {/* Soft glowing pulsing orbs */}
-        <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-[#692475]/15 rounded-full blur-[110px] animate-pulse-glow" />
-        <div className="absolute bottom-1/3 right-1/4 w-96 h-96 bg-[#82ab7d]/10 rounded-full blur-[130px] animate-pulse-glow" style={{ animationDelay: "-3s" }} />
+        <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-[#1e3a8a]/30 rounded-full blur-[110px] animate-pulse-glow" />
+        <div className="absolute bottom-1/3 right-1/4 w-96 h-96 bg-[#0ea5e9]/20 rounded-full blur-[130px] animate-pulse-glow" style={{ animationDelay: "-3s" }} />
 
         {/* Ambient Light streaks */}
         <div className="streak streak-1" />
         <div className="streak streak-1 particle-delay-2" style={{ left: "65%", animationDelay: "4s" }} />
 
         {/* Floating Geometric shapes */}
-        <div className="absolute top-12 left-1/3 w-16 h-16 border border-[#a47dab]/10 rounded-full flex items-center justify-center opacity-40 animate-float">
-          <div className="w-10 h-10 border border-[#82ab7d]/10 rounded-full" />
+        <div className="absolute top-12 left-1/3 w-16 h-16 border border-[#38bdf8]/10 rounded-full flex items-center justify-center opacity-40 animate-float">
+          <div className="w-10 h-10 border border-[#0ea5e9]/10 rounded-full" />
         </div>
-        <div className="absolute bottom-24 right-1/3 w-20 h-20 border border-[#82ab7d]/10 rotate-12 flex items-center justify-center opacity-30 animate-float" style={{ animationDelay: "-2s" }}>
-          <div className="w-12 h-12 border border-[#a47dab]/10" />
+        <div className="absolute bottom-24 right-1/3 w-20 h-20 border border-[#0ea5e9]/10 rotate-12 flex items-center justify-center opacity-30 animate-float" style={{ animationDelay: "-2s" }}>
+          <div className="w-12 h-12 border border-[#38bdf8]/10" />
         </div>
 
         {/* Floating hostel icons with very low opacity */}
-        <div className="absolute top-1/3 left-10 opacity-5 animate-float"><HomeIcon className="h-16 w-16 text-[#a47dab]" /></div>
-        <div className="absolute top-20 right-20 opacity-5 animate-float" style={{ animationDelay: "-1s" }}><Shield className="h-14 w-14 text-[#82ab7d]" /></div>
-        <div className="absolute bottom-1/3 left-20 opacity-5 animate-float" style={{ animationDelay: "-3s" }}><Brain className="h-14 w-14 text-[#a47dab]" /></div>
-        <div className="absolute bottom-20 right-10 opacity-5 animate-float" style={{ animationDelay: "-2s" }}><QrCode className="h-16 w-16 text-[#82ab7d]" /></div>
+        <div className="absolute top-1/3 left-10 opacity-5 animate-float"><HomeIcon className="h-16 w-16 text-[#38bdf8]" /></div>
+        <div className="absolute top-20 right-20 opacity-5 animate-float" style={{ animationDelay: "-1s" }}><Shield className="h-14 w-14 text-[#0ea5e9]" /></div>
+        <div className="absolute bottom-1/3 left-20 opacity-5 animate-float" style={{ animationDelay: "-3s" }}><Brain className="h-14 w-14 text-[#38bdf8]" /></div>
+        <div className="absolute bottom-20 right-10 opacity-5 animate-float" style={{ animationDelay: "-2s" }}><QrCode className="h-16 w-16 text-[#0ea5e9]" /></div>
       </div>
 
       {/* Constellation & Star Network Canvas */}
@@ -272,23 +280,24 @@ export default function Home() {
 
       {/* Cursor Spotlight Glow */}
       <div
-        className="fixed inset-0 pointer-events-none z-0 transition-opacity duration-300"
+        ref={spotlightRef}
+        className="fixed inset-0 pointer-events-none z-0"
         style={{
-          background: `radial-gradient(650px at ${spotlightPos.x}px ${spotlightPos.y}px, rgba(164, 125, 171, 0.07), transparent 70%)`,
+          background: `radial-gradient(650px at 0px 0px, rgba(164, 125, 171, 0.0), transparent 70%)`,
         }}
       />
 
       {/* Animated Skyline Silhouette at the bottom */}
       <div className="absolute bottom-0 left-0 right-0 h-40 opacity-10 pointer-events-none z-0 flex items-end">
-        <svg className="w-full h-full text-[#a47dab]" viewBox="0 0 1440 200" fill="currentColor" preserveAspectRatio="none">
+        <svg className="w-full h-full text-[#38bdf8]" viewBox="0 0 1440 200" fill="currentColor" preserveAspectRatio="none">
           <path d="M0 200V150l20-10h15l10 10h30l5-25h40l10 25h35l15-35h50l20 35h45l5-40h60l10 40h40l10-50h70l20 50h30l5-15h50l10 15h45l20-60h60l15 60h40l10-30h50l15 30h40l15-20h60l10 20h35l20-75h55l20 75h40l10-40h50l15 40h35l10-15h60l15 15h45l20-30h60l15 30h40v50z" />
           {/* Neon occupancy indicators in windows */}
-          <circle cx="45" cy="165" r="1.5" className="fill-[#82ab7d] animate-ping" />
+          <circle cx="45" cy="165" r="1.5" className="fill-[#38bdf8] animate-ping" />
           <circle cx="120" cy="140" r="1.5" className="fill-rose-500 animate-pulse" />
-          <circle cx="340" cy="130" r="1.5" className="fill-[#82ab7d] animate-pulse" />
-          <circle cx="680" cy="110" r="1.5" className="fill-[#82ab7d] animate-ping" />
+          <circle cx="340" cy="130" r="1.5" className="fill-[#38bdf8] animate-pulse" />
+          <circle cx="680" cy="110" r="1.5" className="fill-[#38bdf8] animate-ping" />
           <circle cx="980" cy="120" r="1.5" className="fill-rose-500 animate-pulse" />
-          <circle cx="1240" cy="90" r="1.5" className="fill-[#82ab7d] animate-pulse" />
+          <circle cx="1240" cy="90" r="1.5" className="fill-[#38bdf8] animate-pulse" />
         </svg>
       </div>
 
@@ -299,7 +308,7 @@ export default function Home() {
         transition={{ duration: 0.9, ease: "easeOut" }}
         className="text-center mb-8 flex flex-col items-center z-10"
       >
-        <div className="h-16 w-16 bg-gradient-to-tr from-[#692475] to-[#82ab7d] rounded-2xl flex items-center justify-center shadow-lg border border-white/20 mb-4 animate-pulse-glow relative overflow-hidden group">
+        <div className="h-16 w-16 bg-gradient-to-tr from-[#1e40af] to-[#0ea5e9] rounded-2xl flex items-center justify-center shadow-lg border border-white/20 mb-4 animate-pulse-glow relative overflow-hidden group">
           <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer" style={{ animationDuration: '2.5s' }} />
           <svg className="h-9 w-9 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M2 12c0 4.418 4.477 8 10 8s10-3.582 10-8" />
@@ -311,16 +320,16 @@ export default function Home() {
         </div>
         
         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight drop-shadow-md relative">
-          <span className="bg-gradient-to-r from-[#E8D8EC] to-[#F4ECF7] bg-clip-text text-transparent">Campus</span>
-          <span className="bg-gradient-to-r from-[#C2E2BE] to-[#93c572] bg-clip-text text-transparent">Nest</span>
+          <span className="bg-gradient-to-r from-[#bae6fd] to-[#f0f9ff] bg-clip-text text-transparent">Campus</span>
+          <span className="bg-gradient-to-r from-[#38bdf8] to-[#0ea5e9] bg-clip-text text-transparent">Nest</span>
         </h1>
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: "3.5rem" }}
           transition={{ delay: 0.5, duration: 0.8 }}
-          className="h-1 bg-[#82ab7d] mt-2.5 rounded-full shadow-lg shadow-[#82ab7d]/50"
+          className="h-1 bg-[#38bdf8] mt-2.5 rounded-full shadow-lg shadow-[#38bdf8]/50"
         />
-        <p className="text-xs md:text-sm font-semibold opacity-70 mt-2 tracking-wide uppercase text-[#82ab7d]">
+        <p className="text-xs md:text-sm font-semibold opacity-70 mt-2 tracking-wide uppercase text-[#0ea5e9]">
           An Intelligent Hostel Management Platform
         </p>
       </motion.div>
@@ -337,20 +346,20 @@ export default function Home() {
           className="glass-panel rounded-3xl p-6 md:p-8 flex flex-col justify-between border border-white/10 shadow-2xl relative overflow-hidden group"
         >
           {/* Soft animated border pulse */}
-          <div className="absolute inset-0 border border-[#a47dab]/10 group-hover:border-[#a47dab]/35 rounded-3xl transition-colors duration-500 pointer-events-none" />
+          <div className="absolute inset-0 border border-[#38bdf8]/10 group-hover:border-[#a47dab]/35 rounded-3xl transition-colors duration-500 pointer-events-none" />
 
           <div>
             <div className="mb-6">
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-[#cfaecf] bg-clip-text text-transparent">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-white to-[#bae6fd] bg-clip-text text-transparent">
                 Welcome Back
               </h2>
-              <div className="w-12 h-1 bg-[#82ab7d] mt-2 rounded-full" />
+              <div className="w-12 h-1 bg-[#38bdf8] mt-2 rounded-full" />
             </div>
 
             <div className="space-y-4">
               <button
                 onClick={() => quickLogin("student")}
-                className="w-full py-3.5 px-4 rounded-2xl glass-card flex items-center justify-between border border-[#82ab7d]/40 text-[#82ab7d] font-semibold group/btn transition-all duration-300 hover:shadow-lg hover:shadow-[#82ab7d]/10 hover:border-[#82ab7d]"
+                className="w-full py-3.5 px-4 rounded-2xl glass-card flex items-center justify-between border border-[#82ab7d]/40 text-[#0ea5e9] font-semibold group/btn transition-all duration-300 hover:shadow-lg hover:shadow-[#38bdf8]/10 hover:border-[#38bdf8]"
               >
                 <span className="flex items-center gap-3">
                   <User className="h-5 w-5" /> Quick Student Login
@@ -370,7 +379,7 @@ export default function Home() {
 
               <button
                 onClick={() => quickLogin("admin")}
-                className="w-full py-3.5 px-4 rounded-2xl glass-card flex items-center justify-between border border-[#82ab7d]/40 text-[#82ab7d] font-semibold group/btn transition-all duration-300 hover:shadow-lg hover:shadow-[#82ab7d]/10 hover:border-[#82ab7d]"
+                className="w-full py-3.5 px-4 rounded-2xl glass-card flex items-center justify-between border border-[#82ab7d]/40 text-[#0ea5e9] font-semibold group/btn transition-all duration-300 hover:shadow-lg hover:shadow-[#38bdf8]/10 hover:border-[#38bdf8]"
               >
                 <span className="flex items-center gap-3">
                   <Shield className="h-5 w-5" /> Quick Admin Login
@@ -394,9 +403,9 @@ export default function Home() {
           className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 flex flex-col justify-center shadow-2xl relative overflow-hidden group"
         >
           {/* Soft animated border pulse */}
-          <div className="absolute inset-0 border border-[#82ab7d]/10 group-hover:border-[#82ab7d]/35 rounded-3xl transition-colors duration-500 pointer-events-none" />
+          <div className="absolute inset-0 border border-[#0ea5e9]/10 group-hover:border-[#82ab7d]/35 rounded-3xl transition-colors duration-500 pointer-events-none" />
 
-          <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-white to-[#cfaecf] bg-clip-text text-transparent">
+          <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-white to-[#bae6fd] bg-clip-text text-transparent">
             {isRegister ? "Create Student Account" : "Secure Log In"}
           </h2>
 
@@ -426,7 +435,7 @@ export default function Home() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-black/35 border border-white/10 rounded-xl focus:border-[#a47dab] focus:ring-1 focus:ring-[#a47dab]/50 focus:outline-none text-sm text-slate-200 transition-all duration-300"
+                  className="w-full pl-10 pr-4 py-3 bg-black/35 border border-white/10 rounded-xl focus:border-[#38bdf8] focus:ring-1 focus:ring-[#38bdf8]/50 focus:outline-none text-sm text-slate-200 transition-all duration-300"
                   placeholder="student1@campusnest.edu"
                 />
               </div>
@@ -444,7 +453,7 @@ export default function Home() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 py-3 bg-black/35 border border-white/10 rounded-xl focus:border-[#a47dab] focus:ring-1 focus:ring-[#a47dab]/50 focus:outline-none text-sm text-slate-200 transition-all duration-300"
+                  className="w-full pl-10 pr-10 py-3 bg-black/35 border border-white/10 rounded-xl focus:border-[#38bdf8] focus:ring-1 focus:ring-[#38bdf8]/50 focus:outline-none text-sm text-slate-200 transition-all duration-300"
                   placeholder="••••••••••••"
                 />
                 <button
@@ -462,11 +471,11 @@ export default function Home() {
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"
-                    className="rounded border-white/10 bg-black/40 text-[#a47dab] focus:ring-[#a47dab] h-3.5 w-3.5"
+                    className="rounded border-white/10 bg-black/40 text-[#38bdf8] focus:ring-[#a47dab] h-3.5 w-3.5"
                   />
                   <span>Remember me</span>
                 </label>
-                <a href="#" className="text-[#a47dab] hover:text-[#82ab7d] transition-colors">
+                <a href="#" className="text-[#38bdf8] hover:text-[#0ea5e9] transition-colors">
                   Forgot Password?
                 </a>
               </div>
@@ -564,7 +573,7 @@ export default function Home() {
 
           <button
             onClick={() => setIsRegister(!isRegister)}
-            className="text-xs text-center font-semibold mt-4 text-[#a47dab] hover:text-[#82ab7d] hover:underline transition-colors"
+            className="text-xs text-center font-semibold mt-4 text-[#38bdf8] hover:text-[#0ea5e9] hover:underline transition-colors"
           >
             {isRegister ? "Already have an account? Log In" : "New Student? Create an account"}
           </button>
@@ -579,17 +588,17 @@ export default function Home() {
         className="mt-12 flex flex-wrap gap-8 justify-center items-center text-xs text-slate-400 border-t border-white/5 pt-6 z-10 w-full max-w-4xl"
       >
         <div className="flex items-center gap-2">
-          <BarChart2 className="h-4 w-4 text-[#a47dab]" />
+          <BarChart2 className="h-4 w-4 text-[#38bdf8]" />
           <span>Smart Management</span>
         </div>
         <div className="h-4 w-[1px] bg-white/10 hidden md:block" />
         <div className="flex items-center gap-2">
-          <Brain className="h-4 w-4 text-[#82ab7d]" />
+          <Brain className="h-4 w-4 text-[#0ea5e9]" />
           <span>AI Powered Insights</span>
         </div>
         <div className="h-4 w-[1px] bg-white/10 hidden md:block" />
         <div className="flex items-center gap-2">
-          <Shield className="h-4 w-4 text-[#a47dab]" />
+          <Shield className="h-4 w-4 text-[#38bdf8]" />
           <span>Secure & Reliable</span>
         </div>
       </motion.div>

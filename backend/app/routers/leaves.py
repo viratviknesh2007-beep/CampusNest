@@ -25,6 +25,11 @@ def apply_leave(leave: schemas.LeaveRequestCreate, db: Session = Depends(get_db)
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found")
 
+    # Delete old leave requests and old gate passes to keep only the newest one
+    db.query(models.LeaveRequest).filter(models.LeaveRequest.student_id == student.id).delete()
+    db.query(models.GatePass).filter(models.GatePass.student_id == student.id).delete()
+    db.commit()
+
     db_leave = models.LeaveRequest(
         student_id=student.id,
         start_date=leave.start_date,
@@ -55,8 +60,21 @@ def review_leave(leave_id: int, review: schemas.LeaveRequestUpdate, db: Session 
     if not leave:
         raise HTTPException(status_code=404, detail="Leave request not found")
         
+    old_status = leave.status
     leave.status = review.status
     leave.warden_remarks = review.warden_remarks
+    
+    # Auto-generate gate pass if approved
+    if old_status != "Approved" and review.status == "Approved":
+        db_pass = models.GatePass(
+            student_id=leave.student_id,
+            purpose=f"Approved Leave: {leave.reason}",
+            exit_time=leave.start_date,
+            entry_time=leave.end_date,
+            qr_code_data="APPROVED",
+            status="Approved"
+        )
+        db.add(db_pass)
     
     # Notify student
     student_user = db.query(models.User).filter(models.User.id == leave.student.user_id).first()

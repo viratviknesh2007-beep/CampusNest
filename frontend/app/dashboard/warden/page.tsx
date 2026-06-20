@@ -18,14 +18,23 @@ import {
   ExternalLink,
   ChevronRight,
   Sparkles,
-  AlertTriangle
+  AlertTriangle,
+  Sun,
+  Sunset,
+  Moon,
+  Pencil,
+  Send
 } from "lucide-react";
 import InteractiveBackground from "@/components/InteractiveBackground";
+import { useTheme } from "@/components/ThemeWrapper";
 
 export default function WardenDashboard() {
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState("leaves");
   const [user, setUser] = useState<any>(null);
+  const [postMsgText, setPostMsgText] = useState("");
+  const [postedMessages, setPostedMessages] = useState<any[]>([]);
   
   // Data States
   const [leaves, setLeaves] = useState<any[]>([]);
@@ -34,12 +43,36 @@ export default function WardenDashboard() {
   const [hostelMap, setHostelMap] = useState<any[]>([]);
   const [aiTrends, setAiTrends] = useState<string>("");
   const [complaintHeatmap, setComplaintHeatmap] = useState<any[]>([]);
+  const [housekeepingContacts, setHousekeepingContacts] = useState<any[]>([]);
   
   // UI states
   const [remarks, setRemarks] = useState<{ [id: number]: string }>({});
   const [selectedBlockId, setSelectedBlockId] = useState<number | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
   const [loadingAction, setLoadingAction] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedHeatmapFloor, setSelectedHeatmapFloor] = useState<{ blockId: number, floor: string } | null>(null);
+  const [editingContactKey, setEditingContactKey] = useState<string | null>(null);
+  const [editingContactValue, setEditingContactValue] = useState("");
+
+  // Unseen Notifications State
+  const [lastSeenCount, setLastSeenCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("last_seen_warden_messages_count");
+      if (saved) {
+        setLastSeenCount(parseInt(saved, 10));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "post_messages") {
+      setLastSeenCount(postedMessages.length);
+      localStorage.setItem("last_seen_warden_messages_count", postedMessages.length.toString());
+    }
+  }, [activeTab, postedMessages.length]);
 
   useEffect(() => {
     fetchWardenData();
@@ -108,6 +141,18 @@ export default function WardenDashboard() {
       });
       if (heatmapRes.ok) setComplaintHeatmap(await heatmapRes.json());
 
+      // 8. Fetch housekeeping contacts
+      const hkRes = await fetch(`${apiUrl}/api/complaints/housekeeping`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (hkRes.ok) setHousekeepingContacts(await hkRes.json());
+
+      // 9. Fetch Broadcast Messages
+      const msgRes = await fetch(`${apiUrl}/api/auth/messages`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (msgRes.ok) setPostedMessages(await msgRes.json());
+
     } catch (err) {
       console.error(err);
       localStorage.clear();
@@ -118,6 +163,38 @@ export default function WardenDashboard() {
   const handleLogout = () => {
     localStorage.clear();
     router.push("/");
+  };
+
+  const handlePostMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!postMsgText.trim()) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+      const res = await fetch(`${apiUrl}/api/auth/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ content: postMsgText })
+      });
+
+      if (res.ok) {
+        setPostMsgText("");
+        const msgRes = await fetch(`${apiUrl}/api/auth/messages`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (msgRes.ok) setPostedMessages(await msgRes.json());
+        alert("Message posted successfully to all students!");
+      } else {
+        alert("Failed to post message.");
+      }
+    } catch (err) {
+      alert("Error posting message.");
+    }
   };
 
   // Review Leave
@@ -197,12 +274,65 @@ export default function WardenDashboard() {
     }
   };
 
-  if (!user) return <div className="p-8 text-center text-slate-300">Loading Warden Profile...</div>;
+  const handleResolveAllOnFloor = async (blockId: number, floorNum: number) => {
+    // Find all active complaints for this block and floor
+    const activeFloorComplaints = complaints.filter(c => 
+      c.status !== "Resolved" && 
+      c.student.room?.block_id === blockId && 
+      c.student.room?.floor === floorNum
+    );
+
+    const token = localStorage.getItem("token");
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+    for (const c of activeFloorComplaints) {
+      try {
+        await fetch(`${apiUrl}/api/complaints/${c.id}/status`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: "Resolved" })
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    // Refresh dashboard data
+    fetchWardenData();
+  };
+
+  const handleUpdateContact = async (contactId: number, number: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${apiUrl}/api/complaints/housekeeping/${contactId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ contact_number: number })
+      });
+      if (res.ok) {
+        // Refresh housekeeping contacts
+        const hkRes = await fetch(`${apiUrl}/api/complaints/housekeeping`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (hkRes.ok) setHousekeepingContacts(await hkRes.json());
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  if (!user) return <div className="p-8 text-center text-sky-200">Loading Warden Profile...</div>;
 
   const selectedBlock = hostelMap.find(b => b.block_id === selectedBlockId);
 
   return (
-    <div className="relative flex h-screen overflow-hidden bg-[#0b0f19] text-slate-100">
+    <div className="relative flex h-screen overflow-hidden bg-transparent text-[var(--text-primary)]">
       <InteractiveBackground />
 
       {/* Sidebar Navigation */}
@@ -218,8 +348,8 @@ export default function WardenDashboard() {
               </svg>
             </div>
             <div>
-              <h2 className="font-extrabold text-lg tracking-tight text-white">CampusNest</h2>
-              <p className="text-xs opacity-60">Warden Portal</p>
+              <h2 className="font-extrabold text-lg tracking-tight text-[var(--text-primary)]">CampusNest</h2>
+              <p className="text-xs text-white/90">Warden Portal</p>
             </div>
           </div>
 
@@ -227,37 +357,63 @@ export default function WardenDashboard() {
             <button
               onClick={() => setActiveTab("leaves")}
               className={`w-full py-2.5 px-4 rounded-xl flex items-center gap-3 font-semibold text-sm transition-all ${
-                activeTab === "leaves" ? "bg-[#82ab7d]/20 text-[#cfaecf] border-l-4 border-[#82ab7d]" : "opacity-70 hover:opacity-100 hover:bg-white/5"
+                activeTab === "leaves" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
               }`}
             >
               <FileText className="h-4.5 w-4.5" /> Leave Forms
             </button>
 
             <button
+              onClick={() => setActiveTab("students")}
+              className={`w-full py-2.5 px-4 rounded-xl flex items-center gap-3 font-semibold text-sm transition-all ${
+                activeTab === "students" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
+              }`}
+            >
+              <Users className="h-4.5 w-4.5" /> Student Records
+            </button>
+
+            <button
               onClick={() => setActiveTab("complaints")}
               className={`w-full py-2.5 px-4 rounded-xl flex items-center gap-3 font-semibold text-sm transition-all ${
-                activeTab === "complaints" ? "bg-[#82ab7d]/20 text-[#cfaecf] border-l-4 border-[#82ab7d]" : "opacity-70 hover:opacity-100 hover:bg-white/5"
+                activeTab === "complaints" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
               }`}
             >
               <MessageSquare className="h-4.5 w-4.5" /> Complaint Box
             </button>
 
             <button
-              onClick={() => setActiveTab("students")}
+              onClick={() => setActiveTab("map")}
               className={`w-full py-2.5 px-4 rounded-xl flex items-center gap-3 font-semibold text-sm transition-all ${
-                activeTab === "students" ? "bg-[#82ab7d]/20 text-[#cfaecf] border-l-4 border-[#82ab7d]" : "opacity-70 hover:opacity-100 hover:bg-white/5"
+                activeTab === "map" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
               }`}
             >
-              <Users className="h-4.5 w-4.5" /> Student Roster
+              <Home className="h-4.5 w-4.5" /> Rooms Available
             </button>
 
             <button
-              onClick={() => setActiveTab("map")}
+              onClick={() => setActiveTab("approved")}
               className={`w-full py-2.5 px-4 rounded-xl flex items-center gap-3 font-semibold text-sm transition-all ${
-                activeTab === "map" ? "bg-[#82ab7d]/20 text-[#cfaecf] border-l-4 border-[#82ab7d]" : "opacity-70 hover:opacity-100 hover:bg-white/5"
+                activeTab === "approved" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
               }`}
             >
-              <Home className="h-4.5 w-4.5" /> Interactive Map
+              <CheckCircle className="h-4.5 w-4.5" /> Approved Details
+            </button>
+
+            <button
+              onClick={() => setActiveTab("post_messages")}
+              title="messages will dissappear every 24 hrs"
+              className={`w-full py-2.5 px-4 rounded-xl flex items-center justify-between font-semibold text-sm transition-all ${
+                activeTab === "post_messages" ? "bg-slate-800/80 text-white border-l-4 border-emerald-500 font-bold" : "text-white opacity-80 hover:opacity-100 hover:bg-slate-800/50"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Send className="h-4.5 w-4.5" /> Post Messages
+              </div>
+              {postedMessages.length - lastSeenCount > 0 && activeTab !== "post_messages" && (
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-600 text-white rounded-full">
+                  {postedMessages.length - lastSeenCount}
+                </span>
+              )}
             </button>
           </nav>
         </div>
@@ -274,28 +430,43 @@ export default function WardenDashboard() {
       <div className="flex-1 flex flex-col overflow-y-auto p-4 md:p-8 z-10">
         
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+        <div className="flex items-center justify-between mb-8 pb-4 border-b border-[var(--glass-border)]">
           <div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-white">
               Warden Operations Dashboard
             </h1>
-            <p className="text-xs opacity-60 mt-1">
+            <p className="text-xs text-sky-300 mt-1">
               Logged in as: {user.full_name} | Role: Hostel Warden
             </p>
           </div>
         </div>
 
+        {postedMessages.length - lastSeenCount > 0 && activeTab !== "post_messages" && (
+          <div className="mb-6 p-4 rounded-2xl bg-indigo-500/10 border-2 border-indigo-500/20 text-white text-xs md:text-sm font-semibold flex justify-between items-center gap-3 animate-pulse-subtle">
+            <div className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-indigo-400 animate-bounce" />
+              <span>You have {postedMessages.length - lastSeenCount} new unread messages.</span>
+            </div>
+            <button
+              onClick={() => setActiveTab("post_messages")}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold transition-all shadow cursor-pointer shrink-0"
+            >
+              View
+            </button>
+          </div>
+        )}
+
         {/* Mobile Tab Switcher */}
-        <div className="flex gap-2 overflow-x-auto pb-4 mb-4 md:hidden border-b border-white/5">
-          {["leaves", "complaints", "students", "map"].map((t) => (
+        <div className="flex gap-2 overflow-x-auto pb-4 mb-4 md:hidden border-b border-[var(--glass-border)]">
+          {["leaves", "students", "complaints", "map", "approved", "post_messages"].map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
               className={`px-4 py-1.5 rounded-full text-xs font-bold capitalize shrink-0 transition-all ${
-                activeTab === t ? "bg-[#82ab7d]/20 text-[#cfaecf] border border-[#82ab7d]" : "glass-card text-slate-300"
+                activeTab === t ? "bg-emerald-600 text-white border border-emerald-500 font-bold" : "glass-card text-sky-200"
               }`}
             >
-              {t}
+              {t === "approved" ? "Approved Details" : t === "map" ? "Rooms Available" : t === "post_messages" ? (activeTab === "post_messages" ? "Post Messages" : (postedMessages.length - lastSeenCount > 0 ? `Post Messages (${postedMessages.length - lastSeenCount})` : "Post Messages")) : t}
             </button>
           ))}
         </div>
@@ -303,20 +474,20 @@ export default function WardenDashboard() {
         {/* Tab 1: Leave Forms Review */}
         {activeTab === "leaves" && (
           <div className="space-y-6">
-            <div className="glass-panel rounded-2xl p-6 border border-white/5">
-              <h2 className="text-lg font-bold mb-4 text-white">Student Outing & Leave Applications</h2>
+            <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80">
+              <h2 className="text-lg font-bold mb-4 text-[var(--text-primary)]">Student Outing & Leave Applications</h2>
               <div className="space-y-4">
-                {leaves.map((l) => (
-                  <div key={l.id} className="p-5 rounded-2xl bg-white/5 border border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                {leaves.filter(l => l.status !== "Approved").map((l) => (
+                  <div key={l.id} className="p-5 rounded-2xl bg-[var(--input-bg)] border-2 border-slate-800/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-white text-sm">{l.student.user.full_name}</span>
-                        <span className="text-[10px] opacity-60 font-semibold px-2 py-0.5 bg-white/5 rounded">Roll: {l.student.roll_number}</span>
+                        <span className="font-bold text-[var(--text-primary)] text-sm">{l.student.user.full_name}</span>
+                        <span className="text-[10px] text-sky-300 font-semibold px-2 py-0.5 bg-[var(--input-bg)] rounded">Roll: {l.student.roll_number}</span>
                       </div>
-                      <p className="text-xs text-slate-300">
+                      <p className="text-xs text-sky-200">
                         <span className="font-semibold text-indigo-400">Duration:</span> {new Date(l.start_date).toLocaleDateString()} to {new Date(l.end_date).toLocaleDateString()}
                       </p>
-                      <p className="text-xs text-slate-300">
+                      <p className="text-xs text-sky-200">
                         <span className="font-semibold text-indigo-400">Reason:</span> {l.reason}
                       </p>
                       {l.warden_remarks && (
@@ -334,7 +505,7 @@ export default function WardenDashboard() {
                             placeholder="Add remarks (optional)..."
                             value={remarks[l.id] || ""}
                             onChange={(e) => setRemarks({ ...remarks, [l.id]: e.target.value })}
-                            className="p-2 bg-black/25 border border-white/10 rounded-lg text-xs text-white"
+                            className="p-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-[var(--input-text)] text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
                           />
                           <div className="flex gap-2 justify-end">
                             <button
@@ -363,9 +534,92 @@ export default function WardenDashboard() {
                     </div>
                   </div>
                 ))}
-                {leaves.length === 0 && (
-                  <p className="text-xs opacity-60 text-center py-6 text-slate-300">No leave requests registered.</p>
+                {leaves.filter(l => l.status !== "Approved").length === 0 && (
+                  <p className="text-xs text-sky-300 text-center py-6 text-sky-200">No pending or rejected leave requests registered.</p>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 1.5: Approved Details */}
+        {activeTab === "approved" && (
+          <div className="space-y-6">
+            <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-[var(--text-primary)]">Approved Leave Applications</h2>
+                  <p className="text-xs text-sky-300 mt-1">Showing approved leaves stored for up to 7 days.</p>
+                </div>
+                {/* Search Bar */}
+                <div className="relative w-full md:w-72">
+                  <input
+                    type="text"
+                    placeholder="Search by student name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-3 pr-10 py-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-2.5 text-sky-300 hover:text-white cursor-pointer"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {(() => {
+                  const sevenDaysAgo = new Date();
+                  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+                  const filteredApproved = leaves.filter((l) => {
+                    if (l.status !== "Approved") return false;
+                    const startDate = new Date(l.start_date);
+                    const isWithin7Days = startDate >= sevenDaysAgo;
+                    if (!isWithin7Days) return false;
+
+                    if (searchQuery.trim() === "") return true;
+                    return l.student.user.full_name.toLowerCase().includes(searchQuery.toLowerCase());
+                  });
+
+                  return (
+                    <>
+                      {filteredApproved.map((l) => (
+                        <div key={l.id} className="p-5 rounded-2xl bg-[var(--input-bg)] border-2 border-slate-800/80 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-[var(--text-primary)] text-sm">{l.student.user.full_name}</span>
+                              <span className="text-[10px] text-sky-300 font-semibold px-2 py-0.5 bg-[var(--input-bg)] rounded">Roll: {l.student.roll_number}</span>
+                            </div>
+                            <p className="text-xs text-sky-200">
+                              <span className="font-semibold text-indigo-400">Duration:</span> {new Date(l.start_date).toLocaleDateString()} to {new Date(l.end_date).toLocaleDateString()}
+                            </p>
+                            <p className="text-xs text-sky-200">
+                              <span className="font-semibold text-indigo-400">Reason:</span> {l.reason}
+                            </p>
+                            {l.warden_remarks && (
+                              <p className="text-[11px] text-amber-400 italic">
+                                Remarks: "{l.warden_remarks}"
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-400">
+                              Approved
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                      {filteredApproved.length === 0 && (
+                        <p className="text-xs text-sky-300 text-center py-6 text-sky-200">No approved leave requests found.</p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -374,36 +628,35 @@ export default function WardenDashboard() {
         {/* Tab 2: Complaint Box */}
         {activeTab === "complaints" && (
           <div className="space-y-6">
-            
-            {/* AI analysis trends */}
-            <div className="glass-panel rounded-2xl p-5 border border-white/5 flex gap-4 items-start bg-indigo-950/20 border-indigo-500/20">
-              <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-400">
-                <Sparkles className="h-6 w-6 animate-pulse" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">AI Operations Analysis</h3>
-                <p className="text-xs text-indigo-200 opacity-90 leading-relaxed">
-                  {aiTrends || "Compiling complaint data and trends..."}
-                </p>
-              </div>
-            </div>
-
             <div className="grid md:grid-cols-3 gap-6">
-              
+
               {/* Complaints list */}
-              <div className="md:col-span-2 glass-panel rounded-2xl p-6 border border-white/5 space-y-4">
-                <h2 className="text-lg font-bold text-white">Student Complaints & Help Tickets</h2>
+              <div className="md:col-span-2 glass-panel rounded-2xl p-6 border-2 border-slate-800/80 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg font-bold text-[var(--text-primary)]">Student Complaints & Help Tickets</h2>
+                  <button
+                    onClick={() => setComplaints([])}
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer border border-white/10"
+                  >
+                    Refresh
+                  </button>
+                </div>
                 <div className="space-y-3">
                   {complaints.map((c) => (
-                    <div key={c.id} className="p-4 rounded-xl bg-white/5 border border-white/5">
+                    <div key={c.id} className="p-4 rounded-xl bg-[var(--input-bg)] border-2 border-slate-800/80">
                       <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-semibold text-sm text-white">{c.title}</h4>
-                          <p className="text-xs text-slate-300 mt-1">{c.description}</p>
-                          <div className="mt-2 text-[10px] text-slate-400 space-y-1">
-                            <div>Submitted by: <span className="font-semibold text-white">{c.student.user.full_name}</span></div>
-                            <div>Location: <span className="font-semibold text-white">Block {c.student.room?.block_name || "N/A"} - Room {c.student.room?.room_number || "N/A"}</span></div>
-                            <div>Category: <span className="font-semibold text-white">{c.category}</span> | Filed: {new Date(c.created_at).toLocaleDateString()}</div>
+                        <div className="space-y-1.5 text-xs text-sky-200">
+                          <div>
+                            <span className="font-bold text-[var(--text-primary)]">Name:</span> {c.student.user.full_name}
+                          </div>
+                          <div>
+                            <span className="font-bold text-[var(--text-primary)]">Problem:</span> {c.description}
+                          </div>
+                          <div>
+                            <span className="font-bold text-[var(--text-primary)]">Room No:</span> {c.student.room?.room_number || "N/A"}
+                          </div>
+                          <div>
+                            <span className="font-bold text-[var(--text-primary)]">Block:</span> {c.student.room?.block_name || "N/A"}
                           </div>
                         </div>
                         
@@ -439,44 +692,145 @@ export default function WardenDashboard() {
                     </div>
                   ))}
                   {complaints.length === 0 && (
-                    <p className="text-xs opacity-60 text-center py-6 text-slate-300">No student complaints filed.</p>
+                    <p className="text-xs text-sky-300 text-center py-6 text-sky-200">No student complaints filed.</p>
                   )}
                 </div>
               </div>
 
-              {/* Heatmap / Analytics statistics */}
-              <div className="glass-panel rounded-2xl p-6 border border-white/5 space-y-6">
-                <h3 className="text-base font-bold text-white border-b border-white/5 pb-2">Facility Heatmap</h3>
-                {complaintHeatmap.map((b) => (
-                  <div key={b.block_id} className="space-y-3">
-                    <div className="flex justify-between items-center text-sm font-semibold text-white">
-                      <span>{b.block_name}</span>
-                      <span className="text-xs px-2 py-0.5 rounded bg-rose-500/20 text-rose-300">
-                        {b.total_complaints} Active issues
-                      </span>
-                    </div>
+              {/* Housekeeping Contacts */}
+              <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80 space-y-6">
+                <h3 className="text-base font-bold text-[var(--text-primary)] border-b border-[var(--glass-border)] pb-2">Housekeeping Contacts</h3>
+                
+                <div className="grid grid-cols-1 gap-6">
+                  
+                  {/* Boys Block Square Box */}
+                  <div className="p-6 bg-[var(--input-bg)] border border-[var(--glass-border)] rounded-2xl flex flex-col justify-between aspect-square">
+                    <h4 className="text-sm font-bold text-sky-300 uppercase tracking-wider border-b border-[var(--glass-border)] pb-2">Boys Block</h4>
+                    <div className="flex-1 flex flex-col justify-around pt-2">
+                      {["Electrician", "Plumber", "Cleaning", "Internet", "Furniture"].map((profession) => {
+                        const block = "Boys";
+                        const c = housekeepingContacts.find(
+                          (hc) => hc.block_type === block && hc.job_profession === profession
+                        ) || { id: -1, block_type: block, job_profession: profession, contact_number: "" };
+                        const key = `${block}-${profession}`;
+                        const isEditing = editingContactKey === key;
 
-                    <div className="grid grid-cols-3 gap-2">
-                      {Object.entries(b.floors).map(([floor, count]: any) => (
-                        <div key={floor} className={`p-2 rounded-lg text-center border ${
-                          count > 0 ? "bg-rose-500/10 border-rose-500/30 text-rose-300" : "bg-white/5 border-white/5 opacity-60"
-                        }`}>
-                          <span className="block font-black text-xs">{count}</span>
-                          <span className="text-[9px] opacity-70">Floor {floor}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="space-y-1 text-xs pt-1">
-                      {Object.entries(b.categories).map(([cat, count]: any) => (
-                        <div key={cat} className="flex justify-between items-center p-1 rounded bg-black/20 text-[11px]">
-                          <span className="opacity-80">{cat}</span>
-                          <span className={`font-semibold ${count > 0 ? "text-rose-400" : "opacity-40"}`}>{count}</span>
-                        </div>
-                      ))}
+                        return (
+                          <div key={profession} className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-[var(--text-primary)]">{profession}:</span>
+                            <div className="flex items-center gap-2">
+                              {isEditing ? (
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    value={editingContactValue}
+                                    onChange={(e) => setEditingContactValue(e.target.value)}
+                                    className="w-24 px-1.5 py-0.5 bg-black/40 border border-[var(--glass-border)] rounded text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                    placeholder="Contact..."
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      handleUpdateContact(c.id, editingContactValue);
+                                      setEditingContactKey(null);
+                                    }}
+                                    className="p-0.5 text-emerald-500 hover:text-emerald-400 cursor-pointer"
+                                  >
+                                    <Check className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingContactKey(null)}
+                                    className="p-0.5 text-rose-500 hover:text-rose-400 cursor-pointer"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="text-sky-200">{c.contact_number || "Not Added"}</span>
+                                  <button
+                                    onClick={() => {
+                                      setEditingContactKey(key);
+                                      setEditingContactValue(c.contact_number || "");
+                                    }}
+                                    className="p-0.5 text-sky-400 hover:text-sky-300 cursor-pointer"
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                ))}
+
+                  {/* Girls Block Square Box */}
+                  <div className="p-6 bg-[var(--input-bg)] border border-[var(--glass-border)] rounded-2xl flex flex-col justify-between aspect-square">
+                    <h4 className="text-sm font-bold text-rose-300 uppercase tracking-wider border-b border-[var(--glass-border)] pb-2">Girls Block</h4>
+                    <div className="flex-1 flex flex-col justify-around pt-2">
+                      {["Electrician", "Plumber", "Cleaning", "Internet", "Furniture"].map((profession) => {
+                        const block = "Girls";
+                        const c = housekeepingContacts.find(
+                          (hc) => hc.block_type === block && hc.job_profession === profession
+                        ) || { id: -1, block_type: block, job_profession: profession, contact_number: "" };
+                        const key = `${block}-${profession}`;
+                        const isEditing = editingContactKey === key;
+
+                        return (
+                          <div key={profession} className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-[var(--text-primary)]">{profession}:</span>
+                            <div className="flex items-center gap-2">
+                              {isEditing ? (
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    value={editingContactValue}
+                                    onChange={(e) => setEditingContactValue(e.target.value)}
+                                    className="w-24 px-1.5 py-0.5 bg-black/40 border border-[var(--glass-border)] rounded text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                    placeholder="Contact..."
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      handleUpdateContact(c.id, editingContactValue);
+                                      setEditingContactKey(null);
+                                    }}
+                                    className="p-0.5 text-emerald-500 hover:text-emerald-400 cursor-pointer"
+                                  >
+                                    <Check className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingContactKey(null)}
+                                    className="p-0.5 text-rose-500 hover:text-rose-400 cursor-pointer"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="text-sky-200">{c.contact_number || "Not Added"}</span>
+                                  <button
+                                    onClick={() => {
+                                      setEditingContactKey(key);
+                                      setEditingContactValue(c.contact_number || "");
+                                    }}
+                                    className="p-0.5 text-sky-400 hover:text-sky-300 cursor-pointer"
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                </div>
+
               </div>
 
             </div>
@@ -485,12 +839,12 @@ export default function WardenDashboard() {
 
         {/* Tab 3: Student Roster */}
         {activeTab === "students" && (
-          <div className="glass-panel rounded-2xl p-6 border border-white/5">
-            <h2 className="text-lg font-bold mb-4 text-white">Student Occupancy Records</h2>
+          <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80">
+            <h2 className="text-lg font-bold mb-4 text-[var(--text-primary)]">Student Occupancy Records</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="opacity-60 border-b border-white/5">
+                  <tr className="text-sky-300 border-b border-[var(--glass-border)]">
                     <th className="pb-3 font-semibold uppercase tracking-wider">Student Name</th>
                     <th className="pb-3 font-semibold uppercase tracking-wider">Roll Number</th>
                     <th className="pb-3 font-semibold uppercase tracking-wider">Gender</th>
@@ -500,10 +854,10 @@ export default function WardenDashboard() {
                     <th className="pb-3 font-semibold uppercase tracking-wider">Allocated Room</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-[var(--glass-border)]">
                   {students.map((s) => (
-                    <tr key={s.id} className="hover:bg-white/5 transition-colors">
-                      <td className="py-3.5 font-bold text-white">{s.full_name}</td>
+                    <tr key={s.id} className="hover:bg-[var(--input-bg)] transition-colors">
+                      <td className="py-3.5 font-bold text-[var(--text-primary)]">{s.full_name}</td>
                       <td className="py-3.5">{s.roll_number}</td>
                       <td className="py-3.5 opacity-80">{s.gender}</td>
                       <td className="py-3.5 opacity-80">{s.department}</td>
@@ -516,7 +870,7 @@ export default function WardenDashboard() {
                   ))}
                   {students.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center opacity-50">No students found.</td>
+                      <td colSpan={7} className="py-8 text-center text-sky-300/80">No students found.</td>
                     </tr>
                   )}
                 </tbody>
@@ -530,13 +884,13 @@ export default function WardenDashboard() {
           <div className="space-y-6">
             
             {/* Block switcher */}
-            <div className="flex gap-2 border-b border-white/5 pb-4">
+            <div className="flex gap-2 border-b border-[var(--glass-border)] pb-4">
               {hostelMap.map((b) => (
                 <button
                   key={b.block_id}
                   onClick={() => setSelectedBlockId(b.block_id)}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition-all capitalize border ${
-                    selectedBlockId === b.block_id ? "bg-emerald-500/25 border-emerald-500 text-emerald-400" : "bg-white/5 border-white/5 hover:bg-white/10"
+                    selectedBlockId === b.block_id ? "bg-emerald-500/25 border-emerald-500 text-emerald-400" : "bg-[var(--input-bg)] border-[var(--glass-border)] hover:bg-white/10"
                   }`}
                 >
                   {b.block_name}
@@ -548,12 +902,13 @@ export default function WardenDashboard() {
               <div className="space-y-8">
                 {Array.from({ length: selectedBlock.total_floors }, (_, i) => selectedBlock.total_floors - i).map((floor) => (
                   <div key={floor} className="space-y-3">
-                    <h3 className="text-sm font-bold text-white opacity-60">Floor {floor}</h3>
+                    <h3 className="text-sm font-bold text-[var(--text-primary)] text-sky-300">Floor {floor}</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                       {selectedBlock.rooms.filter((r: any) => r.floor === floor).map((room: any) => {
+                        const isRoomOccupied = room.status === "Occupied" || room.occupants.length >= room.capacity;
                         let colorClass = "room-available";
-                        if (room.status === "Occupied") colorClass = "room-occupied";
-                        if (room.status === "Maintenance") colorClass = "room-maintenance";
+                        if (isRoomOccupied) colorClass = "room-occupied";
+                        else if (room.status === "Maintenance") colorClass = "room-maintenance";
                         if (room.complaints_count > 0) {
                           colorClass = "bg-rose-950/70 hover:bg-rose-900 border border-rose-500/50 text-rose-100 shadow-lg shadow-rose-950/40 animate-pulse-subtle";
                         }
@@ -575,8 +930,8 @@ export default function WardenDashboard() {
                             <span className="text-[10px] block mt-1.5 opacity-80 font-medium">
                               Occupied: {room.occupants.length} / {room.capacity}
                             </span>
-                            <span className="text-[9px] block mt-1 uppercase font-bold tracking-wider opacity-60">
-                              {room.complaints_count > 0 ? "Complaint Active" : room.status}
+                            <span className="text-[9px] block mt-1 uppercase font-bold tracking-wider text-sky-300">
+                              {room.complaints_count > 0 ? "Complaint Active" : (isRoomOccupied ? "Occupied" : room.status)}
                             </span>
                           </button>
                         );
@@ -594,15 +949,15 @@ export default function WardenDashboard() {
                   
                   <button
                     onClick={() => setSelectedRoom(null)}
-                    className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer"
+                    className="absolute top-4 right-4 text-sky-300 hover:text-white cursor-pointer"
                   >
                     <X className="h-5 w-5" />
                   </button>
 
-                  <h3 className="text-lg font-black text-white flex items-center gap-2 mb-2">
+                  <h3 className="text-lg font-black text-[var(--text-primary)] flex items-center gap-2 mb-2">
                     Room Details: {selectedRoom.room_number}
                   </h3>
-                  <p className="text-xs text-slate-300 mb-6">
+                  <p className="text-xs text-sky-200 mb-6">
                     Floor {selectedRoom.floor} | Capacity: {selectedRoom.capacity} slots | Current Status: <span className={`font-bold ${selectedRoom.complaints_count > 0 ? "text-rose-400" : "text-emerald-400"}`}>{selectedRoom.complaints_count > 0 ? "Active Complaints" : selectedRoom.status}</span>
                   </p>
 
@@ -613,16 +968,16 @@ export default function WardenDashboard() {
                       <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2">Room Occupants</h4>
                       <div className="space-y-2">
                         {selectedRoom.occupants.map((o: any) => (
-                          <div key={o.student_id} className="p-3 bg-white/5 rounded-xl border border-white/5 flex justify-between items-center text-xs">
+                          <div key={o.student_id} className="p-3 bg-[var(--input-bg)] rounded-xl border-2 border-slate-800/80 flex justify-between items-center text-xs">
                             <div>
-                              <p className="font-bold text-white">{o.full_name}</p>
-                              <p className="text-[10px] opacity-60">Roll: {o.roll_number} | Year {o.year}</p>
+                              <p className="font-bold text-[var(--text-primary)]">{o.full_name}</p>
+                              <p className="text-[10px] text-sky-300">Roll: {o.roll_number} | Year {o.year}</p>
                             </div>
                             <span className="text-[10px] opacity-75 font-medium">{o.department}</span>
                           </div>
                         ))}
                         {selectedRoom.occupants.length === 0 && (
-                          <p className="text-xs opacity-50 italic text-slate-300">Room is currently empty.</p>
+                          <p className="text-xs text-sky-300/80 italic text-sky-200">Room is currently empty.</p>
                         )}
                       </div>
                     </div>
@@ -649,7 +1004,7 @@ export default function WardenDashboard() {
                           });
 
                           if (complaintsList.length === 0) {
-                            return <p className="text-xs opacity-50 italic text-slate-300">No active complaints filed in this room.</p>;
+                            return <p className="text-xs text-sky-300/80 italic text-sky-200">No active complaints filed in this room.</p>;
                           }
 
                           return complaintsList.map((c: any) => (
@@ -658,8 +1013,8 @@ export default function WardenDashboard() {
                                 <span>{c.title}</span>
                                 <span className="text-[9px] uppercase px-2 py-0.5 bg-rose-500/25 rounded-full">{c.status}</span>
                               </div>
-                              <p className="text-[11px] opacity-80 mb-1 text-slate-300">{c.description}</p>
-                              <div className="text-[9px] opacity-60">Filed by: {c.student_name} | Category: {c.category}</div>
+                              <p className="text-[11px] opacity-80 mb-1 text-sky-200">{c.description}</p>
+                              <div className="text-[9px] text-sky-300">Filed by: {c.student_name} | Category: {c.category}</div>
                               {c.status !== "Resolved" && (
                                 <div className="mt-2 flex gap-1.5 justify-end">
                                   {c.status === "Pending" && (
@@ -690,6 +1045,56 @@ export default function WardenDashboard() {
               </div>
             )}
 
+          </div>
+        )}
+
+        {activeTab === "post_messages" && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80">
+              <h2 className="text-xl font-black text-white mb-2">Post Public Message</h2>
+              <p className="text-xs text-sky-200 mb-6">Send a message to all student portals instantly.</p>
+              
+              <form onSubmit={handlePostMessage} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold mb-2">Message Body</label>
+                  <textarea
+                    required
+                    rows={4}
+                    value={postMsgText}
+                    onChange={(e) => setPostMsgText(e.target.value)}
+                    className="w-full p-2.5 bg-[var(--input-bg)] border border-[var(--input-border)] rounded-xl text-[var(--input-text)] text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    placeholder="Type the message you want to send..."
+                  />
+                </div>
+                
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 font-extrabold rounded-xl text-white transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
+                >
+                  <Send className="h-4 w-4" /> Post Message
+                </button>
+              </form>
+            </div>
+
+            <div className="glass-panel rounded-2xl p-6 border-2 border-slate-800/80">
+              <h3 className="text-lg font-bold mb-2">Notifications</h3>
+              <p className="text-xs text-sky-200 mb-6 font-semibold">messages will dissappear every 24 hrs</p>
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                {postedMessages.length > 0 ? (
+                  postedMessages.map((msg) => (
+                    <div key={msg.id} className="p-4 rounded-xl bg-[var(--input-bg)] border-2 border-slate-800/80">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-xs font-bold text-emerald-400">By: {msg.sender_name}</span>
+                        <span className="text-[10px] text-sky-300 opacity-80">{new Date(msg.created_at).toLocaleString()}</span>
+                      </div>
+                      <p className="text-xs text-white leading-relaxed">{msg.content}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-sky-300 italic">No received messages sent yet.</p>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

@@ -7,8 +7,22 @@ from .. import models, schemas, auth
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-@router.post("/register", response_model=schemas.StudentResponse)
+@router.post("/register")
 def register_student(student_data: schemas.StudentRegister, db: Session = Depends(get_db)):
+    email_lower = student_data.email.strip().lower()
+    
+    if email_lower.endswith("@campusnest.edu"):
+        role = "student"
+    elif email_lower.endswith("@campusnestw.edu"):
+        role = "warden"
+    elif email_lower.endswith("@campusnesta.edu"):
+        role = "admin"
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email domain. Allowed domains: campusnest.edu (Student), campusnestw.edu (Warden), campusnesta.edu (Admin)."
+        )
+
     # Check if user already exists
     existing_user = db.query(models.User).filter(models.User.email == student_data.email).first()
     if existing_user:
@@ -17,13 +31,14 @@ def register_student(student_data: schemas.StudentRegister, db: Session = Depend
             detail="Email already registered"
         )
     
-    # Check roll number uniqueness
-    existing_student = db.query(models.Student).filter(models.Student.roll_number == student_data.roll_number).first()
-    if existing_student:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Roll number already exists"
-        )
+    if role == "student":
+        # Check roll number uniqueness
+        existing_student = db.query(models.Student).filter(models.Student.roll_number == student_data.roll_number).first()
+        if existing_student:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Roll number already exists"
+            )
 
     # Create User
     hashed_pwd = auth.get_password_hash(student_data.password)
@@ -31,36 +46,39 @@ def register_student(student_data: schemas.StudentRegister, db: Session = Depend
         email=student_data.email,
         hashed_password=hashed_pwd,
         full_name=student_data.full_name,
-        role="student"
+        role=role
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
 
-    # Create Student profile
-    db_student = models.Student(
-        user_id=db_user.id,
-        roll_number=student_data.roll_number,
-        gender=student_data.gender,
-        department=student_data.department,
-        year=student_data.year,
-        phone=student_data.phone,
-        emergency_contact=student_data.emergency_contact
-    )
-    db.add(db_student)
-    db.commit()
-    db.refresh(db_student)
+    if role == "student":
+        # Create Student profile
+        db_student = models.Student(
+            user_id=db_user.id,
+            roll_number=student_data.roll_number,
+            gender=student_data.gender,
+            department=student_data.department,
+            year=student_data.year,
+            phone=student_data.phone,
+            emergency_contact=student_data.emergency_contact
+        )
+        db.add(db_student)
+        db.commit()
+        db.refresh(db_student)
 
-    # Add welcome notification
-    welcome_notif = models.Notification(
-        user_id=db_user.id,
-        title="Welcome to CampusNest! 🏠",
-        message=f"Hi {db_user.full_name}, your account is created successfully. You can now explore allocations, leaves, gate passes, and roommate matching."
-    )
-    db.add(welcome_notif)
-    db.commit()
+        # Add welcome notification
+        welcome_notif = models.Notification(
+            user_id=db_user.id,
+            title="Welcome to CampusNest! 🏠",
+            message=f"Hi {db_user.full_name}, your account is created successfully. You can now explore allocations, leaves, gate passes, and roommate matching."
+        )
+        db.add(welcome_notif)
+        db.commit()
 
-    return db_student
+        return {"message": "Student registered successfully", "role": role}
+    else:
+        return {"message": f"{role.capitalize()} registered successfully", "role": role}
 
 @router.post("/login", response_model=schemas.Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -132,3 +150,30 @@ def read_notification(notif_id: int, current_user: models.User = Depends(auth.ge
     notif.is_read = True
     db.commit()
     return {"message": "Notification marked as read"}
+
+@router.post("/messages", response_model=schemas.MessageResponse)
+def post_message(
+    payload: schemas.MessageCreate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.role not in ["admin", "warden"]:
+        raise HTTPException(status_code=403, detail="Only admins and wardens can post messages")
+    
+    new_msg = models.Message(
+        sender_name=current_user.full_name,
+        content=payload.content
+    )
+    db.add(new_msg)
+    db.commit()
+    db.refresh(new_msg)
+    return new_msg
+
+@router.get("/messages", response_model=List[schemas.MessageResponse])
+def get_messages(
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    from datetime import datetime, timedelta
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    return db.query(models.Message).filter(models.Message.created_at >= cutoff).order_by(models.Message.created_at.desc()).all()

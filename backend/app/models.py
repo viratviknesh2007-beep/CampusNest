@@ -55,6 +55,14 @@ class Student(Base):
     phone = Column(String, nullable=False)
     emergency_contact = Column(String, nullable=False)
 
+    # Expanded details fields
+    fees_paid = Column(Boolean, default=False)
+    location = Column(String, nullable=True)
+    parents_name = Column(String, nullable=True)
+    parents_contact = Column(String, nullable=True)
+    locality = Column(String, nullable=True)
+    address = Column(String, nullable=True)
+
     # Roommate Preferences
     sleep_schedule = Column(String, nullable=True)  # Early Bird / Night Owl
     study_preference = Column(String, nullable=True)  # Silent / Group Study
@@ -67,6 +75,17 @@ class Student(Base):
     complaints = relationship("Complaint", back_populates="student")
     leave_requests = relationship("LeaveRequest", back_populates="student")
     gate_passes = relationship("GatePass", back_populates="student")
+
+    @property
+    def room(self):
+        for alloc in self.allocations:
+            if alloc.is_active:
+                return {
+                    "id": alloc.room.id,
+                    "room_number": alloc.room.room_number,
+                    "block_name": alloc.room.block.name
+                }
+        return None
 
 class RoomAllocation(Base):
     __tablename__ = "room_allocations"
@@ -157,3 +176,19 @@ class Notification(Base):
 
     # Relationships
     user = relationship("User", back_populates="notifications")
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sender_name = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class HousekeepingContact(Base):
+    __tablename__ = "housekeeping_contacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    block_type = Column(String, nullable=False)  # "Boys" or "Girls"
+    job_profession = Column(String, nullable=False)  # "Electrician", "Cleaning", "Internet", "Plumbing", "Furniture"
+    contact_number = Column(String, nullable=True)

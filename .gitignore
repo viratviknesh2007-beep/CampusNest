@@ -1,0 +1,29 @@
+# Cache
+__pycache__/
+*.pyc
+**/.next/
+**/node_modules/
+
+# Database files
+*.db
+backend/campusnest.db
+
+# Extra logs and temporary files
+*.log
+*.txt
+*.webp
+*.png
+
+# Temporary developer scripts
+extract_admin_history.py
+extract_admin_source.py
+extract_step_199.py
+inspect_backups.py
+verify_backend_features.py
+backend/create_and_update_db.py
+backend/migrate.py
+backend/update_db.py
+
+# Extracted TSX versions
+v_*.tsx
+readable_v_*.tsx

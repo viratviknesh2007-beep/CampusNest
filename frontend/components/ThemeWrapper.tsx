@@ -31,16 +31,12 @@ export default function ThemeWrapper({ children }: { children: React.ReactNode }
       // Apply theme to document body
       const body = document.body;
       body.classList.remove("theme-morning", "theme-evening", "theme-night");
-      body.classList.add(theme);
+      body.classList.add("theme-night");
     }
   }, [theme, mounted]);
 
-  if (!mounted) {
-    return <div className="min-h-screen bg-slate-900">{children}</div>;
-  }
-
   return (
-    <ThemeContext.Provider value={{ theme, setTheme }}>
+    <ThemeContext.Provider value={{ theme: "theme-night", setTheme: () => {} }}>
       <div className="min-h-screen transition-all duration-1000">
         {children}
       </div>

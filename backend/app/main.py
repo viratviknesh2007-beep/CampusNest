@@ -80,13 +80,13 @@ def seed_db():
         # 3. Create Users & Profiles
         # Admins & Wardens
         admin_user = models.User(
-            email="admin@campusnest.edu",
+            email="admin@campusnesta.edu",
             full_name="Admin Ramesh K",
             role="admin",
             hashed_password=auth.get_password_hash("admin123")
         )
         warden_user = models.User(
-            email="warden@campusnest.edu",
+            email="warden@campusnestw.edu",
             full_name="Warden Joseph S",
             role="warden",
             hashed_password=auth.get_password_hash("warden123")
@@ -229,6 +229,18 @@ def seed_db():
             )
         ])
         db.commit()
+
+        # 8. Housekeeping Contacts
+        if db.query(models.HousekeepingContact).count() == 0:
+            print("Seeding housekeeping contacts...")
+            for block_type in ["Boys", "Girls"]:
+                for job in ["Electrician", "Cleaning", "Internet", "Plumber", "Furniture"]:
+                    db.add(models.HousekeepingContact(
+                        block_type=block_type,
+                        job_profession=job,
+                        contact_number=""
+                    ))
+            db.commit()
 
         print("Database seeding completed.")
     except Exception as e:

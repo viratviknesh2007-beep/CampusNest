@@ -159,3 +159,17 @@ def get_heatmap(db: Session = Depends(get_db)):
         })
         
     return heatmap_data
+
+@router.get("/housekeeping", response_model=List[schemas.HousekeepingContactResponse])
+def get_housekeeping_contacts(db: Session = Depends(get_db)):
+    return db.query(models.HousekeepingContact).all()
+
+@router.put("/housekeeping/{contact_id}", response_model=schemas.HousekeepingContactResponse)
+def update_housekeeping_contact(contact_id: int, contact_update: schemas.HousekeepingContactUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.RoleChecker(["warden", "admin"]))):
+    contact = db.query(models.HousekeepingContact).filter(models.HousekeepingContact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Housekeeping contact not found")
+    contact.contact_number = contact_update.contact_number
+    db.commit()
+    db.refresh(contact)
+    return contact

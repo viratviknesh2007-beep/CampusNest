@@ -71,6 +71,7 @@ class StudentResponse(BaseModel):
     cleanliness_level: Optional[str] = None
     roommate_matched_id: Optional[int] = None
     user: UserResponse
+    room: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -218,6 +219,34 @@ class NotificationResponse(BaseModel):
     message: str
     is_read: bool
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Message schemas
+class MessageCreate(BaseModel):
+    content: str
+
+class MessageResponse(BaseModel):
+    id: int
+    sender_name: str
+    content: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# HousekeepingContact schemas
+class HousekeepingContactBase(BaseModel):
+    block_type: str
+    job_profession: str
+    contact_number: Optional[str] = None
+
+class HousekeepingContactUpdate(BaseModel):
+    contact_number: str
+
+class HousekeepingContactResponse(HousekeepingContactBase):
+    id: int
 
     class Config:
         from_attributes = True
