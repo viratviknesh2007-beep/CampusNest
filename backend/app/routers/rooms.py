@@ -28,7 +28,11 @@ def get_hostel_map(category: Optional[str] = None, db: Session = Depends(get_db)
             occupants = []
             for alloc in allocs:
                 student = db.query(models.Student).filter(models.Student.id == alloc.student_id).first()
+                if not student:
+                    continue
                 user = db.query(models.User).filter(models.User.id == student.user_id).first()
+                if not user:
+                    continue
                 
                 # Fetch active complaints for this student (filtered by category if selected)
                 query = db.query(models.Complaint).filter(
